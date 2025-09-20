@@ -1,0 +1,63 @@
+# Dependencies and Package Managers
+/vendor/
+/node_modules/
+composer.lock
+package-lock.json
+yarn.lock
+*.log
+
+# Environment and Local Config
+.env*
+!.env.example
+.env.backup
+*.config.js
+
+# Version Control
+.git/
+.gitignore
+.gitattributes
+
+# IDE and Editor Files
+.idea/
+.vscode/
+*.sublime-*
+*.swp
+*.swo
+
+# Testing and Coverage
+/tests/
+/coverage/
+phpunit.xml
+.phpunit.result.cache
+
+# Storage and Cache
+/storage/*.key
+/storage/logs/*
+/storage/framework/cache/*
+/storage/framework/sessions/*
+/storage/framework/views/*
+/bootstrap/cache/*
+
+# Build and Assets
+/public/hot
+/public/storage
+/public/css
+/public/js
+/public/mix-manifest.json
+/dist
+/build
+
+# Docker Related
+/docker/*
+!docker/Dockerfile
+docker-compose*.yml
+
+# Documentation
+*.md
+CHANGELOG*
+LICENSE*
+README*
+
+# System Files
+.DS_Store
+Thumbs.db
