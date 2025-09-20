@@ -19,7 +19,7 @@ $router->get('/', function () use ($router) {
         'message' => 'Task Management System API',
         'version' => $router->app->version(),
         'status' => 'active',
-        'timestamp' => now()->toISOString()
+        'timestamp' => \Carbon\Carbon::now()->toISOString()
     ]);
 });
 
@@ -90,6 +90,9 @@ $router->group(['prefix' => 'tasks'], function () use ($router) {
     
     // GET /tasks - List all tasks (with advanced filtering support)
     $router->get('/', 'TaskController@index');
+    
+    // GET /tasks/stats - Get task statistics
+    $router->get('/stats', 'TaskController@stats');
     
     // GET /tasks/simple - Simple task listing (backward compatibility)
     $router->get('/simple', 'TaskController@simpleListing');

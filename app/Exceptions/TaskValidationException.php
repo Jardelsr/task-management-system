@@ -66,6 +66,7 @@ class TaskValidationException extends Exception
     public function getErrorDetails(): array
     {
         return [
+            'success' => false,
             'error' => 'Validation failed',
             'message' => $this->getMessage(),
             'errors' => $this->errors,

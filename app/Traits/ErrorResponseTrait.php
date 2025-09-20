@@ -30,7 +30,7 @@ trait ErrorResponseTrait
             'success' => false,
             'error' => $error,
             'message' => $message ?? $error,
-            'timestamp' => now()->toISOString()
+            'timestamp' => \Carbon\Carbon::now()->toISOString()
         ];
 
         if (!empty($details)) {
@@ -152,6 +152,26 @@ trait ErrorResponseTrait
     }
 
     /**
+     * Create a bad request error response
+     *
+     * @param string $message
+     * @param array $details
+     * @return JsonResponse
+     */
+    protected function badRequestResponse(
+        string $message = 'Bad request',
+        array $details = []
+    ): JsonResponse {
+        return $this->errorResponse(
+            'Bad request',
+            $message,
+            400,
+            $details,
+            'BAD_REQUEST'
+        );
+    }
+
+    /**
      * Create a server error response
      *
      * @param string|null $message
@@ -172,31 +192,136 @@ trait ErrorResponseTrait
     }
 
     /**
-     * Create a success response
+     * Create a method not allowed error response
      *
-     * @param mixed $data
-     * @param string|null $message
-     * @param int $statusCode
+     * @param string $method
+     * @param array $allowedMethods
      * @return JsonResponse
      */
-    protected function successResponse(
-        $data = null,
-        ?string $message = null,
-        int $statusCode = 200
+    protected function methodNotAllowedResponse(
+        string $method,
+        array $allowedMethods = []
     ): JsonResponse {
-        $response = [
-            'success' => true,
-            'timestamp' => now()->toISOString()
-        ];
+        return $this->errorResponse(
+            'Method not allowed',
+            "The {$method} method is not allowed for this endpoint",
+            405,
+            ['method' => $method, 'allowed_methods' => $allowedMethods],
+            'METHOD_NOT_ALLOWED'
+        );
+    }
 
-        if ($message) {
-            $response['message'] = $message;
+    /**
+     * Create a conflict error response
+     *
+     * @param string $message
+     * @param array $details
+     * @return JsonResponse
+     */
+    protected function conflictResponse(
+        string $message = 'Resource conflict',
+        array $details = []
+    ): JsonResponse {
+        return $this->errorResponse(
+            'Conflict',
+            $message,
+            409,
+            $details,
+            'CONFLICT'
+        );
+    }
+
+    /**
+     * Create a too many requests error response
+     *
+     * @param string|null $message
+     * @param int $retryAfter
+     * @return JsonResponse
+     */
+    protected function tooManyRequestsResponse(
+        ?string $message = null,
+        int $retryAfter = 60
+    ): JsonResponse {
+        $response = $this->errorResponse(
+            'Too many requests',
+            $message ?? 'Rate limit exceeded',
+            429,
+            ['retry_after' => $retryAfter],
+            'RATE_LIMIT_EXCEEDED'
+        );
+
+        return $response->header('Retry-After', $retryAfter);
+    }
+
+    /**
+     * Create an unprocessable entity error response
+     *
+     * @param string $message
+     * @param array $errors
+     * @return JsonResponse
+     */
+    protected function unprocessableEntityResponse(
+        string $message = 'Unprocessable entity',
+        array $errors = []
+    ): JsonResponse {
+        return $this->errorResponse(
+            'Unprocessable entity',
+            $message,
+            422,
+            ['errors' => $errors],
+            'UNPROCESSABLE_ENTITY'
+        );
+    }
+
+    /**
+     * Create a service unavailable error response
+     *
+     * @param string|null $message
+     * @param int $retryAfter
+     * @return JsonResponse
+     */
+    protected function serviceUnavailableResponse(
+        ?string $message = null,
+        int $retryAfter = 300
+    ): JsonResponse {
+        $response = $this->errorResponse(
+            'Service unavailable',
+            $message ?? 'Service is temporarily unavailable',
+            503,
+            ['retry_after' => $retryAfter],
+            'SERVICE_UNAVAILABLE'
+        );
+
+        return $response->header('Retry-After', $retryAfter);
+    }
+
+    /**
+     * Create a custom exception error response
+     *
+     * @param \Throwable $exception
+     * @param array $context
+     * @return JsonResponse
+     */
+    protected function exceptionResponse(
+        \Throwable $exception,
+        array $context = []
+    ): JsonResponse {
+        $statusCode = method_exists($exception, 'getStatusCode') 
+            ? $exception->getStatusCode() 
+            : ($exception->getCode() ?: 500);
+
+        $details = $context;
+        
+        if (method_exists($exception, 'getErrorDetails')) {
+            $details = array_merge($details, $exception->getErrorDetails());
         }
 
-        if ($data !== null) {
-            $response['data'] = $data;
-        }
-
-        return response()->json($response, $statusCode);
+        return $this->errorResponse(
+            class_basename($exception),
+            $exception->getMessage(),
+            $statusCode,
+            $details,
+            'EXCEPTION_ERROR'
+        );
     }
 }

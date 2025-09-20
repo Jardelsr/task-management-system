@@ -2,26 +2,37 @@
 
 namespace App\Http\Requests;
 
-use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use App\Models\Task;
 
-class CreateTaskRequest extends FormRequest
+class CreateTaskRequest
 {
-    /**
-     * Determine if the user is authorized to make this request.
-     */
-    public function authorize(): bool
-    {
-        return true;
-    }
-
     /**
      * Get the validation rules that apply to the request.
      *
-     * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
+     * @return array
      */
     public function rules(): array
+    {
+        return self::getValidationRules();
+    }
+
+    /**
+     * Get custom error messages for validation rules.
+     *
+     * @return array
+     */
+    public function messages(): array
+    {
+        return self::getValidationMessages();
+    }
+
+    /**
+     * Get validation rules as a static method for use in controllers
+     *
+     * @return array
+     */
+    public static function getValidationRules(): array
     {
         return [
             'title' => 'required|string|max:255',
@@ -37,61 +48,25 @@ class CreateTaskRequest extends FormRequest
     }
 
     /**
-     * Get custom error messages for validation rules.
+     * Get validation messages as a static method for use in controllers
      *
-     * @return array<string, string>
+     * @return array
      */
-    public function messages(): array
+    public static function getValidationMessages(): array
     {
         return [
             'title.required' => 'The task title is required.',
-            'title.max' => 'The task title cannot exceed 255 characters.',
-            'description.max' => 'The task description cannot exceed 1000 characters.',
-            'status.in' => 'The selected status is invalid. Valid statuses are: ' . implode(', ', Task::getAvailableStatuses()),
-            'created_by.integer' => 'The created_by field must be a valid user ID.',
-            'created_by.min' => 'The created_by field must be a positive integer.',
-            'assigned_to.integer' => 'The assigned_to field must be a valid user ID.',
-            'assigned_to.min' => 'The assigned_to field must be a positive integer.',
+            'title.string' => 'The task title must be a valid string.',
+            'title.max' => 'The task title may not be greater than 255 characters.',
+            'description.string' => 'The description must be a valid string.',
+            'description.max' => 'The description may not be greater than 1000 characters.',
+            'status.in' => 'The selected status is invalid. Valid options are: ' . implode(', ', Task::getAvailableStatuses()),
+            'created_by.integer' => 'The created by field must be a valid integer.',
+            'created_by.min' => 'The created by field must be at least 1.',
+            'assigned_to.integer' => 'The assigned to field must be a valid integer.',
+            'assigned_to.min' => 'The assigned to field must be at least 1.',
             'due_date.date' => 'The due date must be a valid date.',
-            'due_date.after' => 'The due date must be in the future.'
+            'due_date.after' => 'The due date must be a date after today.'
         ];
-    }
-
-    /**
-     * Get custom attributes for validator errors.
-     *
-     * @return array<string, string>
-     */
-    public function attributes(): array
-    {
-        return [
-            'created_by' => 'creator',
-            'assigned_to' => 'assignee',
-            'due_date' => 'due date'
-        ];
-    }
-
-    /**
-     * Prepare the data for validation.
-     */
-    protected function prepareForValidation(): void
-    {
-        // Set default status if not provided
-        if (!$this->has('status')) {
-            $this->merge([
-                'status' => Task::STATUS_PENDING
-            ]);
-        }
-
-        // Convert due_date to proper format if provided
-        if ($this->has('due_date') && $this->due_date) {
-            try {
-                $this->merge([
-                    'due_date' => \Carbon\Carbon::parse($this->due_date)->toDateTimeString()
-                ]);
-            } catch (\Exception $e) {
-                // Let validation handle the error
-            }
-        }
     }
 }

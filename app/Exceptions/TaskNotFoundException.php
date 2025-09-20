@@ -51,6 +51,7 @@ class TaskNotFoundException extends Exception
     public function getErrorDetails(): array
     {
         return [
+            'success' => false,
             'error' => 'Task not found',
             'message' => $this->getMessage(),
             'task_id' => $this->taskId,

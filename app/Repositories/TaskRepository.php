@@ -40,10 +40,27 @@ class TaskRepository implements TaskRepositoryInterface
      *
      * @param array $data
      * @return Task
+     * @throws \App\Exceptions\DatabaseException
      */
     public function create(array $data): Task
     {
-        return Task::create($data);
+        try {
+            return Task::create($data);
+        } catch (\Illuminate\Database\QueryException $e) {
+            throw new \App\Exceptions\DatabaseException(
+                'Failed to create task: ' . $e->getMessage(),
+                'create',
+                ['data' => $data],
+                500
+            );
+        } catch (\Exception $e) {
+            throw new \App\Exceptions\TaskOperationException(
+                'Unexpected error during task creation: ' . $e->getMessage(),
+                'create',
+                null,
+                500
+            );
+        }
     }
 
     /**
@@ -52,18 +69,36 @@ class TaskRepository implements TaskRepositoryInterface
      * @param int $id
      * @param array $data
      * @return Task|null
+     * @throws \App\Exceptions\DatabaseException
+     * @throws \App\Exceptions\TaskOperationException
      */
     public function update(int $id, array $data): ?Task
     {
-        $task = $this->findById($id);
-        
-        if (!$task) {
-            return null;
+        try {
+            $task = $this->findById($id);
+            
+            if (!$task) {
+                return null;
+            }
+            
+            $task->update($data);
+            
+            return $task->fresh();
+        } catch (\Illuminate\Database\QueryException $e) {
+            throw new \App\Exceptions\DatabaseException(
+                'Failed to update task: ' . $e->getMessage(),
+                'update',
+                ['id' => $id, 'data' => $data],
+                500
+            );
+        } catch (\Exception $e) {
+            throw new \App\Exceptions\TaskOperationException(
+                'Unexpected error during task update: ' . $e->getMessage(),
+                'update',
+                $id,
+                500
+            );
         }
-        
-        $task->update($data);
-        
-        return $task->fresh();
     }
 
     /**
