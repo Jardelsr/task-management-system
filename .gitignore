@@ -1,0 +1,15 @@
+/vendor
+/.idea
+/.vscode
+.env
+.env.backup
+.phpunit.result.cache
+Homestead.json
+Homestead.yaml
+docker-compose.override.yml
+storage/*.key
+storage/framework/views/*
+storage/framework/cache/*
+storage/framework/sessions/*
+storage/logs/*
+*.log

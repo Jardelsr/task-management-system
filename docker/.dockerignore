@@ -51,6 +51,8 @@ phpunit.xml
 /docker/*
 !docker/Dockerfile
 docker-compose*.yml
+docker-compose.*.yml
+.dockerignore
 
 # Documentation
 *.md
