@@ -54,5 +54,6 @@ $app->configure('mongo');
 
 $app->register(Illuminate\Database\DatabaseServiceProvider::class);
 $app->register(MongoDB\Laravel\MongoDBServiceProvider::class);
+$app->register(App\Providers\AppServiceProvider::class);
 
 return $app;

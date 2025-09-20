@@ -15,7 +15,7 @@ return new class extends Migration
             $table->id();
             $table->string('title');
             $table->text('description')->nullable();
-            $table->enum('status', ['pending', 'in_progress', 'completed'])->default('pending');
+            $table->enum('status', ['pending', 'in_progress', 'completed', 'cancelled'])->default('pending');
             $table->unsignedBigInteger('created_by')->nullable();
             $table->unsignedBigInteger('assigned_to')->nullable();
             $table->timestamp('due_date')->nullable();
