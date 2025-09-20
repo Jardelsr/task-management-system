@@ -17,6 +17,14 @@ interface LogRepositoryInterface
     public function create(array $data): TaskLog;
 
     /**
+     * Find a log by ID
+     *
+     * @param string $id
+     * @return TaskLog|null
+     */
+    public function findById(string $id): ?TaskLog;
+
+    /**
      * Find logs by task ID
      *
      * @param int $taskId

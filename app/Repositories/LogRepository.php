@@ -20,6 +20,17 @@ class LogRepository implements LogRepositoryInterface
     }
 
     /**
+     * Find a log by ID
+     *
+     * @param string $id
+     * @return TaskLog|null
+     */
+    public function findById(string $id): ?TaskLog
+    {
+        return TaskLog::find($id);
+    }
+
+    /**
      * Find logs by task ID
      *
      * @param int $taskId

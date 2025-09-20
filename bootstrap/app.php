@@ -45,6 +45,7 @@ $app->singleton(
 
 $app->configure('database');
 $app->configure('mongo');
+$app->configure('errors');
 
 /*
 |--------------------------------------------------------------------------
@@ -55,5 +56,17 @@ $app->configure('mongo');
 $app->register(Illuminate\Database\DatabaseServiceProvider::class);
 $app->register(MongoDB\Laravel\MongoDBServiceProvider::class);
 $app->register(App\Providers\AppServiceProvider::class);
+
+/*
+|--------------------------------------------------------------------------
+| Load The Application Routes
+|--------------------------------------------------------------------------
+*/
+
+$app->router->group([
+    'namespace' => 'App\Http\Controllers',
+], function ($router) {
+    require __DIR__.'/../routes/web.php';
+});
 
 return $app;

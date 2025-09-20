@@ -93,4 +93,20 @@ interface TaskRepositoryInterface
      * @return bool
      */
     public function forceDelete(int $id): bool;
+
+    /**
+     * Find tasks with advanced filtering
+     *
+     * @param array $filters
+     * @return Collection<int, Task>
+     */
+    public function findWithFilters(array $filters): Collection;
+
+    /**
+     * Count tasks with advanced filtering
+     *
+     * @param array $filters
+     * @return int
+     */
+    public function countWithFilters(array $filters): int;
 }
