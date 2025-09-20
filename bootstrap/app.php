@@ -46,6 +46,7 @@ $app->singleton(
 $app->configure('database');
 $app->configure('mongo');
 $app->configure('errors');
+$app->configure('api');
 
 /*
 |--------------------------------------------------------------------------

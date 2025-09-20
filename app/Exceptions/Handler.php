@@ -82,7 +82,7 @@ class Handler extends ExceptionHandler
      */
     public function render($request, Throwable $exception)
     {
-        // Handle custom task exceptions
+        // Handle custom task exceptions with enhanced logging
         if ($exception instanceof TaskNotFoundException) {
             return response()->json($exception->getErrorDetails(), $exception->getCode());
         }
@@ -114,9 +114,16 @@ class Handler extends ExceptionHandler
             );
         }
 
-        // Handle model not found exceptions
+        // Handle model not found exceptions - convert to our custom format
         if ($exception instanceof ModelNotFoundException) {
             $model = class_basename($exception->getModel());
+            
+            // If it's a Task model, use our custom TaskNotFoundException format
+            if ($model === 'Task') {
+                $taskNotFoundException = new TaskNotFoundException(null, 'model_query', 'Task not found in database');
+                return response()->json($taskNotFoundException->getErrorDetails(), 404);
+            }
+            
             return $this->notFoundResponse($model);
         }
 
@@ -124,9 +131,9 @@ class Handler extends ExceptionHandler
         if ($exception instanceof NotFoundHttpException) {
             return $this->errorResponse(
                 'Route not found',
-                'The requested endpoint does not exist',
+                'The requested endpoint does not exist. Please check the URL and method.',
                 404,
-                [],
+                ['available_endpoints' => $this->getAvailableEndpoints()],
                 'ROUTE_NOT_FOUND'
             );
         }
@@ -136,7 +143,7 @@ class Handler extends ExceptionHandler
                 'Method not allowed',
                 'The requested HTTP method is not allowed for this endpoint',
                 405,
-                [],
+                ['allowed_methods' => $exception->getHeaders()['Allow'] ?? []],
                 'METHOD_NOT_ALLOWED'
             );
         }
@@ -157,10 +164,34 @@ class Handler extends ExceptionHandler
 
         // For all other exceptions in production, return a generic error
         if (!config('app.debug')) {
-            return $this->serverErrorResponse();
+            // Log the full error for debugging
+            $this->report($exception);
+            
+            return $this->serverErrorResponse(
+                'An unexpected error occurred. Please try again later.'
+            );
         }
 
         // In debug mode, let Laravel handle it to show detailed error information
         return parent::render($request, $exception);
+    }
+
+    /**
+     * Get available API endpoints for 404 responses
+     *
+     * @return array
+     */
+    private function getAvailableEndpoints(): array
+    {
+        return [
+            'GET /tasks' => 'List all tasks',
+            'GET /tasks/{id}' => 'Get specific task',
+            'POST /tasks' => 'Create new task',
+            'PUT /tasks/{id}' => 'Update task',
+            'DELETE /tasks/{id}' => 'Delete task',
+            'GET /tasks/stats' => 'Get task statistics',
+            'GET /logs' => 'Get system logs',
+            'GET /logs/{id}' => 'Get specific log entry'
+        ];
     }
 }

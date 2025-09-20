@@ -255,4 +255,78 @@ class LogRepository implements LogRepositoryInterface
         
         return $count;
     }
+
+    /**
+     * Find logs with filters and pagination
+     *
+     * @param array $filters
+     * @param int $limit
+     * @param int $offset
+     * @return Collection<int, TaskLog>
+     */
+    public function findWithFilters(array $filters, int $limit = 100, int $offset = 0): Collection
+    {
+        $query = TaskLog::query();
+
+        // Apply filters
+        if (!empty($filters['task_id'])) {
+            $query->where('task_id', $filters['task_id']);
+        }
+
+        if (!empty($filters['action'])) {
+            $query->where('action', $filters['action']);
+        }
+
+        if (!empty($filters['user_id'])) {
+            $query->where('user_id', $filters['user_id']);
+        }
+
+        return $query->orderBy('created_at', 'desc')
+                    ->skip($offset)
+                    ->take($limit)
+                    ->get();
+    }
+
+    /**
+     * Count logs with filters
+     *
+     * @param array $filters
+     * @return int
+     */
+    public function countWithFilters(array $filters): int
+    {
+        $query = TaskLog::query();
+
+        // Apply same filters as findWithFilters
+        if (!empty($filters['task_id'])) {
+            $query->where('task_id', $filters['task_id']);
+        }
+
+        if (!empty($filters['action'])) {
+            $query->where('action', $filters['action']);
+        }
+
+        if (!empty($filters['user_id'])) {
+            $query->where('user_id', $filters['user_id']);
+        }
+
+        return $query->count();
+    }
+
+    /**
+     * Count all logs or logs with specific action
+     *
+     * @param string|null $action
+     * @return int
+     */
+    public function countAll(?string $action = null): int
+    {
+        $query = TaskLog::query();
+        
+        if ($action !== null) {
+            $query->where('action', $action);
+        }
+        
+        return $query->count();
+    }
 }

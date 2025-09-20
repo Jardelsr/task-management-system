@@ -9,6 +9,7 @@ use Illuminate\Http\JsonResponse;
  */
 trait ErrorResponseTrait
 {
+    use ApiHeadersTrait;
     /**
      * Create a standardized error response
      *
@@ -48,7 +49,10 @@ trait ErrorResponseTrait
             ];
         }
 
-        return response()->json($response, $statusCode);
+        $jsonResponse = response()->json($response, $statusCode);
+
+        // Add consistent API headers for error responses too
+        return $this->addApiHeaders($jsonResponse);
     }
 
     /**

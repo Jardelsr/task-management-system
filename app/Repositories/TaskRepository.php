@@ -80,10 +80,43 @@ class TaskRepository implements TaskRepositoryInterface
             if (!$task) {
                 return null;
             }
+
+            // Store original data for logging
+            $originalData = $task->toArray();
             
-            $task->update($data);
+            // Filter out empty/null values for partial updates
+            $updateData = array_filter($data, function($value) {
+                return $value !== '' && $value !== null;
+            });
+
+            // Handle null values explicitly if they were intentionally set
+            foreach ($data as $key => $value) {
+                if ($value === null && array_key_exists($key, $data)) {
+                    $updateData[$key] = null;
+                }
+            }
+
+            // Only proceed if there's data to update
+            if (empty($updateData)) {
+                return $task;
+            }
             
-            return $task->fresh();
+            $task->update($updateData);
+            $updatedTask = $task->fresh();
+
+            // Verify the task still exists after update (in case of race conditions)
+            if (!$updatedTask) {
+                throw new \App\Exceptions\TaskOperationException(
+                    'Task was deleted during update operation',
+                    'update',
+                    $id
+                );
+            }
+
+            // Log the update operation
+            $this->logTaskUpdate($id, $originalData, $updatedTask->toArray(), $updateData);
+            
+            return $updatedTask;
         } catch (\Illuminate\Database\QueryException $e) {
             throw new \App\Exceptions\DatabaseException(
                 'Failed to update task: ' . $e->getMessage(),
@@ -91,6 +124,8 @@ class TaskRepository implements TaskRepositoryInterface
                 ['id' => $id, 'data' => $data],
                 500
             );
+        } catch (\App\Exceptions\TaskOperationException $e) {
+            throw $e;
         } catch (\Exception $e) {
             throw new \App\Exceptions\TaskOperationException(
                 'Unexpected error during task update: ' . $e->getMessage(),
@@ -106,16 +141,36 @@ class TaskRepository implements TaskRepositoryInterface
      *
      * @param int $id
      * @return bool
+     * @throws \App\Exceptions\DatabaseException
      */
     public function delete(int $id): bool
     {
-        $task = $this->findById($id);
-        
-        if (!$task) {
-            return false;
+        try {
+            $task = $this->findById($id);
+            
+            if (!$task) {
+                return false;
+            }
+            
+            // Log the delete operation before deleting
+            $this->logTaskDelete($id, $task->toArray());
+            
+            return $task->delete();
+        } catch (\Illuminate\Database\QueryException $e) {
+            throw new \App\Exceptions\DatabaseException(
+                'Failed to delete task: ' . $e->getMessage(),
+                'delete',
+                ['id' => $id],
+                500
+            );
+        } catch (\Exception $e) {
+            throw new \App\Exceptions\TaskOperationException(
+                'Unexpected error during task deletion: ' . $e->getMessage(),
+                'delete',
+                $id,
+                500
+            );
         }
-        
-        return $task->delete();
     }
 
     /**
@@ -286,5 +341,61 @@ class TaskRepository implements TaskRepositoryInterface
         }
 
         return $query->count();
+    }
+
+    /**
+     * Log task update operation
+     *
+     * @param int $taskId
+     * @param array $originalData
+     * @param array $updatedData
+     * @param array $changedFields
+     * @return void
+     */
+    private function logTaskUpdate(int $taskId, array $originalData, array $updatedData, array $changedFields): void
+    {
+        try {
+            // Only log if there are actual changes
+            $changes = [];
+            foreach ($changedFields as $field => $newValue) {
+                $oldValue = $originalData[$field] ?? null;
+                if ($oldValue !== $newValue) {
+                    $changes[$field] = [
+                        'old' => $oldValue,
+                        'new' => $newValue
+                    ];
+                }
+            }
+
+            if (!empty($changes)) {
+                \App\Models\TaskLog::logUpdated($taskId, $originalData, $updatedData);
+            }
+        } catch (\Exception $e) {
+            // Log the logging error but don't fail the update
+            \Log::error('Failed to log task update', [
+                'task_id' => $taskId,
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
+    /**
+     * Log task delete operation
+     *
+     * @param int $taskId
+     * @param array $taskData
+     * @return void
+     */
+    private function logTaskDelete(int $taskId, array $taskData): void
+    {
+        try {
+            \App\Models\TaskLog::logDeleted($taskId, $taskData);
+        } catch (\Exception $e) {
+            // Log the logging error but don't fail the delete
+            \Log::error('Failed to log task deletion', [
+                'task_id' => $taskId,
+                'error' => $e->getMessage()
+            ]);
+        }
     }
 }

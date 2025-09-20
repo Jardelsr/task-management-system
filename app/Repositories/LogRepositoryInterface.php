@@ -79,6 +79,32 @@ interface LogRepositoryInterface
     public function findRecentDays(int $days = 7, int $limit = 100): Collection;
 
     /**
+     * Find logs with filters and pagination
+     *
+     * @param array $filters
+     * @param int $limit
+     * @param int $offset
+     * @return Collection<int, TaskLog>
+     */
+    public function findWithFilters(array $filters, int $limit = 100, int $offset = 0): Collection;
+
+    /**
+     * Count logs with filters
+     *
+     * @param array $filters
+     * @return int
+     */
+    public function countWithFilters(array $filters): int;
+
+    /**
+     * Count all logs or logs with specific action
+     *
+     * @param string|null $action
+     * @return int
+     */
+    public function countAll(?string $action = null): int;
+
+    /**
      * Log task creation
      *
      * @param int $taskId

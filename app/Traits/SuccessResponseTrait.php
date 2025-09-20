@@ -10,6 +10,7 @@ use Carbon\Carbon;
  */
 trait SuccessResponseTrait
 {
+    use ApiHeadersTrait;
     /**
      * Create a standardized success response
      *
@@ -42,7 +43,10 @@ trait SuccessResponseTrait
             $response['meta'] = $meta;
         }
 
-        return response()->json($response, $statusCode);
+        $jsonResponse = response()->json($response, $statusCode);
+
+        // Add consistent API headers
+        return $this->addApiHeaders($jsonResponse);
     }
 
     /**
@@ -51,28 +55,42 @@ trait SuccessResponseTrait
      * @param mixed $data
      * @param array $pagination
      * @param string|null $message
+     * @param array $additionalMeta
      * @return JsonResponse
      */
     protected function paginatedResponse(
         $data,
         array $pagination,
-        ?string $message = null
+        ?string $message = null,
+        array $additionalMeta = []
     ): JsonResponse {
-        $meta = [
-            'pagination' => [
-                'current_page' => $pagination['current_page'] ?? 1,
-                'per_page' => $pagination['per_page'] ?? 50,
-                'total' => $pagination['total'] ?? 0,
-                'total_pages' => isset($pagination['total'], $pagination['per_page']) 
+        $request = request();
+        
+        // Build comprehensive pagination metadata
+        $paginationMeta = [
+            'current_page' => $pagination['current_page'] ?? 1,
+            'per_page' => $pagination['per_page'] ?? 50,
+            'total' => $pagination['total'] ?? 0,
+            'total_pages' => $pagination['total_pages'] ?? 
+                (isset($pagination['total'], $pagination['per_page']) 
                     ? ceil($pagination['total'] / $pagination['per_page']) 
-                    : 0,
-                'from' => $pagination['from'] ?? null,
-                'to' => $pagination['to'] ?? null,
-                'has_more' => $pagination['has_more'] ?? false
-            ]
+                    : 0),
+            'has_next_page' => $pagination['has_next_page'] ?? false,
+            'has_previous_page' => $pagination['has_previous_page'] ?? false,
+            'next_page' => $pagination['next_page'] ?? null,
+            'previous_page' => $pagination['previous_page'] ?? null
         ];
+        
+        // Build enhanced metadata
+        $meta = $this->buildRequestMetadata($request, [
+            'data_type' => 'collection',
+            'data_count' => is_array($data) ? count($data) : 0
+        ]);
 
-        return $this->successResponse($data, $message, 200, $meta);
+        // Merge with additional metadata and pagination
+        $finalMeta = array_merge($meta, $additionalMeta, ['pagination' => $paginationMeta]);
+
+        return $this->successResponse($data, $message, 200, $finalMeta);
     }
 
     /**
@@ -249,5 +267,109 @@ trait SuccessResponseTrait
             200,
             $meta
         );
+    }
+
+    /**
+     * Add request metadata to response
+     *
+     * @param \Illuminate\Http\Request $request
+     * @param array $additionalMeta
+     * @return array
+     */
+    protected function buildRequestMetadata($request, array $additionalMeta = []): array
+    {
+        $meta = [
+            'request_id' => $request->header('X-Request-ID', uniqid('req_', true)),
+            'api_version' => config('api.version', '1.0'),
+            'timestamp' => Carbon::now()->toISOString(),
+        ];
+
+        if (config('api.responses.include_execution_time', true)) {
+            $meta['execution_time'] = $this->getExecutionTime() . 'ms';
+        }
+
+        if ($request->hasHeader('X-User-ID')) {
+            $meta['user_id'] = $request->header('X-User-ID');
+        }
+
+        return array_merge($meta, $additionalMeta);
+    }
+
+    /**
+     * Enhanced success response with metadata and performance tracking
+     *
+     * @param mixed $data
+     * @param string|null $message
+     * @param int $statusCode
+     * @param array $meta
+     * @param \Illuminate\Http\Request|null $request
+     * @return JsonResponse
+     */
+    protected function enhancedSuccessResponse(
+        $data = null,
+        ?string $message = null,
+        int $statusCode = 200,
+        array $meta = [],
+        $request = null
+    ): JsonResponse {
+        $request = $request ?? request();
+        
+        // Build comprehensive metadata
+        $enhancedMeta = $this->buildRequestMetadata($request, $meta);
+        
+        // Add data type information
+        if ($data !== null) {
+            $enhancedMeta['data_type'] = is_array($data) ? 'collection' : 'object';
+            if (is_array($data)) {
+                $enhancedMeta['data_count'] = count($data);
+            }
+        }
+
+        return $this->successResponse($data, $message, $statusCode, $enhancedMeta);
+    }
+
+    /**
+     * Create response with resource transformation metadata
+     *
+     * @param mixed $data
+     * @param string $resourceType
+     * @param string|null $message
+     * @param array $transformationMeta
+     * @return JsonResponse
+     */
+    protected function resourceResponse(
+        $data,
+        string $resourceType,
+        ?string $message = null,
+        array $transformationMeta = []
+    ): JsonResponse {
+        $meta = [
+            'resource_type' => $resourceType,
+            'timestamp' => Carbon::now()->toISOString()
+        ];
+
+        if (!empty($transformationMeta)) {
+            $meta['transformation'] = $transformationMeta;
+        }
+
+        return $this->successResponse($data, $message, 200, $meta);
+    }
+
+    /**
+     * Create response with validation metadata
+     *
+     * @param mixed $data
+     * @param string|null $message
+     * @param array $validationMeta
+     * @return JsonResponse
+     */
+    protected function validatedResponse(
+        $data,
+        ?string $message = null,
+        array $validationMeta = []
+    ): JsonResponse {
+        $meta = ['validation' => $validationMeta];
+        
+        return $this->successResponse($data, $message, 200, $meta);
     }
 }
