@@ -149,6 +149,137 @@ trait SuccessResponseTrait
     }
 
     /**
+     * Create a success response for soft deletion with recovery info
+     *
+     * @param int|null $taskId
+     * @param string|null $message
+     * @param array $meta
+     * @return JsonResponse
+     */
+    protected function softDeletedResponse(
+        ?int $taskId = null,
+        ?string $message = null,
+        array $meta = []
+    ): JsonResponse {
+        $deletionMeta = [
+            'deletion_type' => 'soft',
+            'recoverable' => true,
+            'deleted_at' => Carbon::now()->toISOString()
+        ];
+
+        if ($taskId) {
+            $deletionMeta['task_id'] = $taskId;
+            $deletionMeta['restore_endpoint'] = "/tasks/{$taskId}/restore";
+        }
+
+        $enhancedMeta = array_merge($deletionMeta, $meta);
+
+        return $this->successResponse(
+            null,
+            $message ?? 'Task soft deleted successfully',
+            202, // 202 Accepted - indicates the request has been accepted but may be reversible
+            $enhancedMeta
+        );
+    }
+
+    /**
+     * Create a success response for task restoration
+     *
+     * @param mixed $data
+     * @param string|null $message
+     * @param array $meta
+     * @return JsonResponse
+     */
+    protected function restoredResponse(
+        $data = null,
+        ?string $message = null,
+        array $meta = []
+    ): JsonResponse {
+        $restorationMeta = [
+            'operation' => 'restore',
+            'restored_at' => Carbon::now()->toISOString(),
+            'status_after_restore' => $data['status'] ?? 'pending'
+        ];
+
+        $enhancedMeta = array_merge($restorationMeta, $meta);
+
+        return $this->successResponse(
+            $data,
+            $message ?? 'Task restored successfully',
+            200,
+            $enhancedMeta
+        );
+    }
+
+    /**
+     * Create a success response for force deletion (permanent)
+     *
+     * @param int|null $taskId
+     * @param string|null $message
+     * @param array $meta
+     * @return JsonResponse
+     */
+    protected function forceDeletedResponse(
+        ?int $taskId = null,
+        ?string $message = null,
+        array $meta = []
+    ): JsonResponse {
+        $deletionMeta = [
+            'deletion_type' => 'permanent',
+            'recoverable' => false,
+            'deleted_at' => Carbon::now()->toISOString(),
+            'warning' => 'This action is irreversible'
+        ];
+
+        if ($taskId) {
+            $deletionMeta['task_id'] = $taskId;
+        }
+
+        $enhancedMeta = array_merge($deletionMeta, $meta);
+
+        return $this->successResponse(
+            null,
+            $message ?? 'Task permanently deleted',
+            204, // 204 No Content - resource no longer exists
+            $enhancedMeta
+        );
+    }
+
+    /**
+     * Create a success response for trashed tasks listing
+     *
+     * @param mixed $data
+     * @param string|null $message
+     * @param array $meta
+     * @return JsonResponse
+     */
+    protected function trashedTasksResponse(
+        $data,
+        ?string $message = null,
+        array $meta = []
+    ): JsonResponse {
+        $trashedMeta = [
+            'resource_type' => 'trashed_tasks',
+            'all_recoverable' => true,
+            'bulk_restore_available' => true,
+            'bulk_force_delete_available' => true
+        ];
+
+        if (is_array($data) || is_countable($data)) {
+            $trashedMeta['count'] = count($data);
+        }
+
+        $enhancedMeta = array_merge($trashedMeta, $meta);
+
+        return $this->successResponse(
+            $data,
+            $message ?? 'Trashed tasks retrieved successfully',
+            200,
+            $enhancedMeta
+        );
+    }
+
+    /**
      * Create a no content response
      *
      * @return JsonResponse

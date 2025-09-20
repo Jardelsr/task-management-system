@@ -71,6 +71,7 @@ class TaskRepository implements TaskRepositoryInterface
      * @return Task|null
      * @throws \App\Exceptions\DatabaseException
      * @throws \App\Exceptions\TaskOperationException
+     * @throws \App\Exceptions\TaskNotFoundException
      */
     public function update(int $id, array $data): ?Task
     {
@@ -78,7 +79,7 @@ class TaskRepository implements TaskRepositoryInterface
             $task = $this->findById($id);
             
             if (!$task) {
-                return null;
+                throw new \App\Exceptions\TaskNotFoundException($id, 'update', null, ['requested_data' => $data]);
             }
 
             // Store original data for logging
@@ -142,6 +143,7 @@ class TaskRepository implements TaskRepositoryInterface
      * @param int $id
      * @return bool
      * @throws \App\Exceptions\DatabaseException
+     * @throws \App\Exceptions\TaskNotFoundException
      */
     public function delete(int $id): bool
     {
@@ -149,7 +151,7 @@ class TaskRepository implements TaskRepositoryInterface
             $task = $this->findById($id);
             
             if (!$task) {
-                return false;
+                throw new \App\Exceptions\TaskNotFoundException($id, 'delete');
             }
             
             // Log the delete operation before deleting
@@ -232,16 +234,43 @@ class TaskRepository implements TaskRepositoryInterface
      *
      * @param int $id
      * @return bool
+     * @throws \App\Exceptions\TaskNotFoundException
+     * @throws \App\Exceptions\TaskRestoreException
      */
     public function restore(int $id): bool
     {
-        $task = Task::withTrashed()->find($id);
-        
-        if (!$task || !$task->trashed()) {
-            return false;
+        try {
+            $task = Task::withTrashed()->find($id);
+            
+            if (!$task) {
+                throw new \App\Exceptions\TaskNotFoundException($id, 'restore');
+            }
+            
+            if (!$task->trashed()) {
+                throw new \App\Exceptions\TaskRestoreException(
+                    'Task is not deleted and cannot be restored',
+                    'restore', 
+                    $id, 
+                    'Task is currently active'
+                );
+            }
+            
+            $restored = $task->restore();
+            
+            if ($restored) {
+                // Log the restore operation
+                $this->logTaskRestore($id, $task->toArray());
+            }
+            
+            return $restored;
+        } catch (\Exception $e) {
+            throw new \App\Exceptions\TaskOperationException(
+                'Failed to restore task: ' . $e->getMessage(),
+                'restore',
+                $id,
+                500
+            );
         }
-        
-        return $task->restore();
     }
 
     /**
@@ -249,16 +278,60 @@ class TaskRepository implements TaskRepositoryInterface
      *
      * @param int $id
      * @return bool
+     * @throws \App\Exceptions\TaskNotFoundException
      */
     public function forceDelete(int $id): bool
     {
-        $task = Task::withTrashed()->find($id);
-        
-        if (!$task) {
-            return false;
+        try {
+            $task = Task::withTrashed()->find($id);
+            
+            if (!$task) {
+                throw new \App\Exceptions\TaskNotFoundException($id, 'force_delete');
+            }
+            
+            // Log the force delete operation before deleting
+            $this->logTaskForceDelete($id, $task->toArray());
+            
+            return $task->forceDelete();
+        } catch (\Exception $e) {
+            throw new \App\Exceptions\TaskOperationException(
+                'Failed to force delete task: ' . $e->getMessage(),
+                'force_delete',
+                $id,
+                500
+            );
         }
-        
-        return $task->forceDelete();
+    }
+
+    /**
+     * Find only trashed (soft-deleted) tasks
+     *
+     * @return Collection<int, Task>
+     */
+    public function findTrashed(): Collection
+    {
+        return Task::onlyTrashed()->get();
+    }
+
+    /**
+     * Find trashed task by ID
+     *
+     * @param int $id
+     * @return Task|null
+     */
+    public function findTrashedById(int $id): ?Task
+    {
+        return Task::onlyTrashed()->find($id);
+    }
+
+    /**
+     * Find tasks including trashed ones
+     *
+     * @return Collection<int, Task>
+     */
+    public function findWithTrashed(): Collection
+    {
+        return Task::withTrashed()->get();
     }
 
     /**
@@ -393,6 +466,44 @@ class TaskRepository implements TaskRepositoryInterface
         } catch (\Exception $e) {
             // Log the logging error but don't fail the delete
             \Log::error('Failed to log task deletion', [
+                'task_id' => $taskId,
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
+    /**
+     * Log task restore operation
+     *
+     * @param int $taskId
+     * @param array $taskData
+     * @return void
+     */
+    private function logTaskRestore(int $taskId, array $taskData): void
+    {
+        try {
+            \App\Models\TaskLog::logRestored($taskId, $taskData);
+        } catch (\Exception $e) {
+            \Log::error('Failed to log task restore', [
+                'task_id' => $taskId,
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
+    /**
+     * Log task force delete operation
+     *
+     * @param int $taskId
+     * @param array $taskData
+     * @return void
+     */
+    private function logTaskForceDelete(int $taskId, array $taskData): void
+    {
+        try {
+            \App\Models\TaskLog::logForceDeleted($taskId, $taskData);
+        } catch (\Exception $e) {
+            \Log::error('Failed to log task force delete', [
                 'task_id' => $taskId,
                 'error' => $e->getMessage()
             ]);

@@ -94,6 +94,9 @@ $router->group(['prefix' => 'tasks'], function () use ($router) {
     // GET /tasks/stats - Get task statistics
     $router->get('/stats', 'TaskController@stats');
     
+    // GET /tasks/trashed - List soft-deleted tasks
+    $router->get('/trashed', 'TaskController@trashed');
+    
     // GET /tasks/simple - Simple task listing (backward compatibility)
     $router->get('/simple', 'TaskController@simpleListing');
     
@@ -103,8 +106,14 @@ $router->group(['prefix' => 'tasks'], function () use ($router) {
     // PUT /tasks/{id} - Update specific task
     $router->put('/{id:[0-9]+}', 'TaskController@update');
     
-    // DELETE /tasks/{id} - Delete specific task
+    // DELETE /tasks/{id} - Delete specific task (soft delete)
     $router->delete('/{id:[0-9]+}', 'TaskController@destroy');
+    
+    // POST /tasks/{id}/restore - Restore soft-deleted task
+    $router->post('/{id:[0-9]+}/restore', 'TaskController@restore');
+    
+    // DELETE /tasks/{id}/force - Force delete task (permanent)
+    $router->delete('/{id:[0-9]+}/force', 'TaskController@forceDelete');
 });
 
 // Root level logs route as per requirements

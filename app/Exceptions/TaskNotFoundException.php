@@ -86,14 +86,27 @@ class TaskNotFoundException extends Exception
      */
     private function logError(): void
     {
-        Log::warning('Task not found', [
-            'task_id' => $this->taskId,
-            'operation' => $this->operation,
-            'context' => $this->context,
-            'timestamp' => Carbon::now()->toISOString(),
-            'user_ip' => request()->ip() ?? 'unknown',
-            'user_agent' => request()->userAgent() ?? 'unknown'
-        ]);
+        try {
+            // Get request details safely for logging
+            $request = null;
+            try {
+                $request = request();
+            } catch (\Exception $e) {
+                // Request may not be available in unit tests or CLI context
+            }
+            
+            Log::warning('Task not found', [
+                'task_id' => $this->taskId,
+                'operation' => $this->operation,
+                'context' => $this->context,
+                'timestamp' => Carbon::now()->toISOString(),
+                'user_ip' => $request ? $request->ip() : 'unknown',
+                'user_agent' => $request ? $request->userAgent() : 'unknown'
+            ]);
+        } catch (\Exception $e) {
+            // Logging may not be available in unit tests or some contexts
+            // Fail silently to not break exception creation
+        }
     }
 
     /**

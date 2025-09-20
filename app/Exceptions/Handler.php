@@ -99,6 +99,10 @@ class Handler extends ExceptionHandler
             return response()->json($exception->getErrorDetails(), $exception->getCode());
         }
 
+        if ($exception instanceof TaskRestoreException) {
+            return response()->json($exception->getErrorDetails(), $exception->getCode());
+        }
+
         if ($exception instanceof LoggingException) {
             // For logging exceptions, return a generic error to avoid exposing internal details
             return $this->serverErrorResponse(

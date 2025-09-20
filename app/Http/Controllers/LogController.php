@@ -229,13 +229,16 @@ class LogController extends Controller
     public function taskLogs(Request $request, int $id): JsonResponse
     {
         try {
+            // Validate task ID format
+            $validatedId = ValidationHelper::validateTaskId($id);
+            
             $limit = min(max((int) $request->query('limit', 50), 1), 1000);
             $page = max((int) $request->query('page', 1), 1);
             $offset = ($page - 1) * $limit;
 
             // Get logs for specific task with pagination
-            $logs = $this->logRepository->findByTask($id, $limit);
-            $totalCount = $this->logRepository->countWithFilters(['task_id' => $id]);
+            $logs = $this->logRepository->findByTask($validatedId, $limit);
+            $totalCount = $this->logRepository->countWithFilters(['task_id' => $validatedId]);
 
             // Calculate pagination metadata
             $totalPages = ceil($totalCount / $limit);
@@ -252,13 +255,15 @@ class LogController extends Controller
             return $this->paginatedResponse(
                 $logs->toArray(),
                 $pagination,
-                "Logs for task {$id} retrieved successfully"
+                "Logs for task {$validatedId} retrieved successfully"
             )->withHeaders([
-                'X-Task-ID' => $id,
+                'X-Task-ID' => $validatedId,
                 'X-Total-Count' => $totalCount,
                 'X-API-Version' => config('api.version', '1.0')
             ]);
 
+        } catch (\App\Exceptions\TaskValidationException $e) {
+            throw $e;
         } catch (\Exception $e) {
             \Log::error('Unexpected error in LogController@taskLogs', [
                 'task_id' => $id,

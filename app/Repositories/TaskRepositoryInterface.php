@@ -37,6 +37,7 @@ interface TaskRepositoryInterface
      * @param int $id
      * @param array $data
      * @return Task|null
+     * @throws \App\Exceptions\TaskNotFoundException
      */
     public function update(int $id, array $data): ?Task;
 
@@ -45,6 +46,7 @@ interface TaskRepositoryInterface
      *
      * @param int $id
      * @return bool
+     * @throws \App\Exceptions\TaskNotFoundException
      */
     public function delete(int $id): bool;
 
@@ -79,10 +81,34 @@ interface TaskRepositoryInterface
     public function countByStatus(?string $status = null): int;
 
     /**
+     * Find only trashed (soft-deleted) tasks
+     *
+     * @return Collection<int, Task>
+     */
+    public function findTrashed(): Collection;
+
+    /**
+     * Find trashed task by ID
+     *
+     * @param int $id
+     * @return Task|null
+     */
+    public function findTrashedById(int $id): ?Task;
+
+    /**
+     * Find tasks including trashed ones
+     *
+     * @return Collection<int, Task>
+     */
+    public function findWithTrashed(): Collection;
+
+    /**
      * Restore a soft-deleted task
      *
      * @param int $id
      * @return bool
+     * @throws \App\Exceptions\TaskNotFoundException
+     * @throws \App\Exceptions\TaskRestoreException
      */
     public function restore(int $id): bool;
 
@@ -91,6 +117,7 @@ interface TaskRepositoryInterface
      *
      * @param int $id
      * @return bool
+     * @throws \App\Exceptions\TaskNotFoundException
      */
     public function forceDelete(int $id): bool;
 

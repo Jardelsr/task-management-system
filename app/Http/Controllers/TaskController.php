@@ -7,6 +7,7 @@ use App\Repositories\LogRepositoryInterface;
 use App\Exceptions\TaskNotFoundException;
 use App\Exceptions\TaskValidationException;
 use App\Exceptions\TaskOperationException;
+use App\Exceptions\TaskRestoreException;
 use App\Http\Requests\CreateTaskRequest;
 use App\Http\Requests\UpdateTaskRequest;
 use App\Http\Requests\ValidationHelper;
@@ -139,14 +140,8 @@ class TaskController extends Controller
             // Validate task ID format
             $validatedId = ValidationHelper::validateTaskId($id);
             
-            // Find the existing task
+            // Find the existing task - repository will throw TaskNotFoundException if not found
             $task = $this->taskRepository->findById($validatedId);
-            
-            if (!$task) {
-                throw TaskNotFoundException::forOperation($validatedId, 'update', [
-                    'requested_data' => $request->all()
-                ]);
-            }
 
             // Validate and prepare update data with comprehensive validation
             $inputData = $request->all();
@@ -174,16 +169,8 @@ class TaskController extends Controller
             // Store original data for comparison
             $originalData = $task->toArray();
 
-            // Perform the partial update
+            // Perform the partial update - repository will throw TaskNotFoundException if task doesn't exist
             $updatedTask = $this->taskRepository->update($validatedId, $validator->validated());
-            
-            if (!$updatedTask) {
-                throw new TaskOperationException(
-                    'Failed to update task - task may have been deleted during the operation', 
-                    'update', 
-                    $validatedId
-                );
-            }
 
             // Determine what fields were actually changed
             $changedFields = $this->getChangedFields($originalData, $updatedTask->toArray());
@@ -240,23 +227,25 @@ class TaskController extends Controller
             // Validate task ID format
             $validatedId = ValidationHelper::validateTaskId($id);
             
+            // Get task info before deletion for metadata
             $task = $this->taskRepository->findById($validatedId);
             
-            if (!$task) {
-                throw TaskNotFoundException::forOperation($validatedId, 'delete');
-            }
-
+            // Delete the task - repository will throw TaskNotFoundException if not found
             $deleteResult = $this->taskRepository->delete($validatedId);
             
-            if (!$deleteResult) {
-                throw new TaskOperationException(
-                    'Failed to delete task - task may have been already deleted',
-                    'delete',
-                    $validatedId
-                );
-            }
-
-            return $this->deletedResponse('Task deleted successfully');
+            // Return enhanced soft delete response with recovery information
+            return $this->softDeletedResponse(
+                $validatedId,
+                'Task has been moved to trash and can be restored if needed',
+                [
+                    'original_status' => $task->status,
+                    'instructions' => [
+                        'restore' => "POST /tasks/{$validatedId}/restore",
+                        'permanent_delete' => "DELETE /tasks/{$validatedId}/force",
+                        'view_trashed' => "GET /tasks/trashed"
+                    ]
+                ]
+            );
         } catch (TaskNotFoundException | TaskOperationException $e) {
             throw $e;
         } catch (\Exception $e) {
@@ -265,6 +254,123 @@ class TaskController extends Controller
                 'delete',
                 $id
             );
+        }
+    }
+
+    /**
+     * Restore a soft-deleted task
+     *
+     * @param Request $request
+     * @param int $id
+     * @return JsonResponse
+     */
+    public function restore(Request $request, int $id): JsonResponse
+    {
+        try {
+            // Validate task ID format
+            $validatedId = ValidationHelper::validateTaskId($id);
+            
+            // Restore the task - repository will handle task existence and restore validation
+            $restoreResult = $this->taskRepository->restore($validatedId);
+            
+            // Return restored task data
+            $restoredTask = $this->taskRepository->findById($validatedId);
+
+            return $this->restoredResponse(
+                $restoredTask->toArray(),
+                'Task has been successfully restored from trash',
+                [
+                    'previous_state' => 'trashed',
+                    'restored_to_status' => $restoredTask->status,
+                    'available_actions' => [
+                        'view' => "GET /tasks/{$validatedId}",
+                        'update' => "PUT /tasks/{$validatedId}",
+                        'delete_again' => "DELETE /tasks/{$validatedId}"
+                    ]
+                ]
+            );
+        } catch (TaskRestoreException | TaskNotFoundException $e) {
+            throw $e;
+        } catch (\Exception $e) {
+            throw new TaskOperationException(
+                'Unexpected error during task restore: ' . $e->getMessage(),
+                'restore',
+                $id
+            );
+        }
+    }
+
+    /**
+     * Force delete a task (permanent deletion)
+     *
+     * @param Request $request
+     * @param int $id
+     * @return JsonResponse
+     */
+    public function forceDelete(Request $request, int $id): JsonResponse
+    {
+        try {
+            // Validate task ID format
+            $validatedId = ValidationHelper::validateTaskId($id);
+            
+            // Force delete the task - repository will throw TaskNotFoundException if not found
+            $forceDeleteResult = $this->taskRepository->forceDelete($validatedId);
+
+            return $this->forceDeletedResponse(
+                $validatedId,
+                "Task has been permanently deleted and cannot be recovered",
+                [
+                    'confirmation_required' => true,
+                    'audit_logged' => true,
+                    'alternative_actions' => [
+                        'create_new' => 'POST /tasks',
+                        'view_all' => 'GET /tasks',
+                        'view_trashed' => 'GET /tasks/trashed'
+                    ]
+                ]
+            );
+        } catch (TaskNotFoundException $e) {
+            throw $e;
+        } catch (\Exception $e) {
+            throw new TaskOperationException(
+                'Unexpected error during task force deletion: ' . $e->getMessage(),
+                'force_delete',
+                $id
+            );
+        }
+    }
+
+    /**
+     * List trashed (soft-deleted) tasks
+     *
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function trashed(Request $request): JsonResponse
+    {
+        try {
+            $trashedTasks = $this->taskRepository->findTrashed();
+            $trashedArray = $trashedTasks->toArray();
+
+            return $this->trashedTasksResponse(
+                $trashedArray,
+                'Trashed tasks retrieved successfully',
+                [
+                    'total_trashed' => count($trashedArray),
+                    'all_recoverable' => true,
+                    'bulk_operations' => [
+                        'restore_all' => 'POST /tasks/restore-all',
+                        'force_delete_all' => 'DELETE /tasks/force-delete-all'
+                    ],
+                    'individual_operations' => [
+                        'restore_single' => 'POST /tasks/{id}/restore',
+                        'force_delete_single' => 'DELETE /tasks/{id}/force'
+                    ],
+                    'note' => 'Soft-deleted tasks remain here until permanently deleted or restored'
+                ]
+            );
+        } catch (\Exception $e) {
+            throw new TaskOperationException('Failed to retrieve trashed tasks', 'trashed');
         }
     }
 

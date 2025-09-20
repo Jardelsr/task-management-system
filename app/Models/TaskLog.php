@@ -55,6 +55,8 @@ class TaskLog extends Model
     const ACTION_CREATED = 'created';
     const ACTION_UPDATED = 'updated';
     const ACTION_DELETED = 'deleted';
+    const ACTION_RESTORED = 'restored';
+    const ACTION_FORCE_DELETED = 'force_deleted';
 
     /**
      * Get available log actions
@@ -67,6 +69,8 @@ class TaskLog extends Model
             self::ACTION_CREATED,
             self::ACTION_UPDATED,
             self::ACTION_DELETED,
+            self::ACTION_RESTORED,
+            self::ACTION_FORCE_DELETED,
         ];
     }
 
@@ -135,6 +139,46 @@ class TaskLog extends Model
         return self::create([
             'task_id' => $taskId,
             'action' => self::ACTION_DELETED,
+            'old_data' => $taskData,
+            'new_data' => [],
+            'user_id' => $userInfo['user_id'] ?? null,
+            'user_name' => $userInfo['user_name'] ?? 'System',
+        ]);
+    }
+
+    /**
+     * Log task restore operation
+     *
+     * @param int $taskId
+     * @param array $taskData
+     * @param array $userInfo
+     * @return self
+     */
+    public static function logRestored(int $taskId, array $taskData, array $userInfo = []): self
+    {
+        return self::create([
+            'task_id' => $taskId,
+            'action' => self::ACTION_RESTORED,
+            'old_data' => [],
+            'new_data' => $taskData,
+            'user_id' => $userInfo['user_id'] ?? null,
+            'user_name' => $userInfo['user_name'] ?? 'System',
+        ]);
+    }
+
+    /**
+     * Log task force delete operation (permanent deletion)
+     *
+     * @param int $taskId
+     * @param array $taskData
+     * @param array $userInfo
+     * @return self
+     */
+    public static function logForceDeleted(int $taskId, array $taskData, array $userInfo = []): self
+    {
+        return self::create([
+            'task_id' => $taskId,
+            'action' => self::ACTION_FORCE_DELETED,
             'old_data' => $taskData,
             'new_data' => [],
             'user_id' => $userInfo['user_id'] ?? null,
