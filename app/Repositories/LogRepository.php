@@ -13,10 +13,32 @@ class LogRepository implements LogRepositoryInterface
      *
      * @param array $data
      * @return TaskLog
+     * @throws \Exception
      */
     public function create(array $data): TaskLog
     {
-        return TaskLog::create($data);
+        try {
+            return TaskLog::create($data);
+        } catch (\MongoDB\Driver\Exception\ConnectionException $e) {
+            \Log::error('MongoDB connection failed in LogRepository::create', [
+                'error' => $e->getMessage(),
+                'data' => $data
+            ]);
+            throw $e; // Re-throw for LogService to handle with fallback
+        } catch (\MongoDB\Driver\Exception\RuntimeException $e) {
+            \Log::error('MongoDB runtime error in LogRepository::create', [
+                'error' => $e->getMessage(),
+                'data' => $data
+            ]);
+            throw $e; // Re-throw for LogService to handle with fallback
+        } catch (\Exception $e) {
+            \Log::error('Unexpected error in LogRepository::create', [
+                'error' => $e->getMessage(),
+                'data' => $data,
+                'trace' => $e->getTraceAsString()
+            ]);
+            throw $e; // Re-throw for LogService to handle with fallback
+        }
     }
 
     /**

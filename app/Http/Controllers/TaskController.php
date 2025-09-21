@@ -159,6 +159,15 @@ class TaskController extends Controller
             
             // Find the existing task - repository will throw TaskNotFoundException if not found
             $task = $this->taskRepository->findById($validatedId);
+            
+            if (!$task) {
+                throw new TaskNotFoundException(
+                    $validatedId,
+                    'update',
+                    'Task not found for update operation',
+                    ['operation' => 'update', 'possible_reasons' => ['Task does not exist', 'Task was deleted', 'Invalid task ID']]
+                );
+            }
 
             // Validate and prepare update data with comprehensive validation
             $inputData = $request->all();
@@ -249,10 +258,19 @@ class TaskController extends Controller
             $deleteResult = $this->taskRepository->delete($validatedId);
             
             // Log the task deletion comprehensively
-            $this->logTaskDeletion($task, 'soft_delete', $request, [
-                'deletion_reason' => $request->input('reason', 'user_initiated'),
-                'batch_operation' => $request->header('X-Batch-ID') ? true : false,
-            ]);
+            try {
+                $this->logTaskDeletion($task, 'soft_delete', $request, [
+                    'deletion_reason' => $request->input('reason', 'user_initiated'),
+                    'batch_operation' => $request->header('X-Batch-ID') ? true : false,
+                ]);
+            } catch (\Exception $e) {
+                // Log the logging error but don't fail the deletion
+                \Log::warning('Failed to create comprehensive task deletion log', [
+                    'task_id' => $task->id,
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString()
+                ]);
+            }
             
             // Return enhanced soft delete response with recovery information
             return $this->softDeletedResponse(
@@ -307,11 +325,20 @@ class TaskController extends Controller
             $restoredTask = $this->taskRepository->findById($validatedId);
 
             // Log the task restoration comprehensively
-            $this->logTaskDeletion($restoredTask, 'restore', $request, [
-                'restoration_reason' => $request->input('reason', 'user_requested'),
-                'previous_state' => 'trashed',
-                'restored_at' => Carbon::now()->toISOString(),
-            ]);
+            try {
+                $this->logTaskDeletion($restoredTask, 'restore', $request, [
+                    'restoration_reason' => $request->input('reason', 'user_requested'),
+                    'previous_state' => 'trashed',
+                    'restored_at' => Carbon::now()->toISOString(),
+                ]);
+            } catch (\Exception $e) {
+                // Log the logging error but don't fail the restoration
+                \Log::warning('Failed to create comprehensive task restoration log', [
+                    'task_id' => $restoredTask->id,
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString()
+                ]);
+            }
 
             return $this->restoredResponse(
                 $restoredTask->toArray(),
@@ -365,12 +392,21 @@ class TaskController extends Controller
             }
             
             // Log the task force deletion before it's permanently removed
-            $this->logTaskDeletion($task, 'force_delete', $request, [
-                'deletion_reason' => $request->input('reason', 'permanent_cleanup'),
-                'confirmation_token' => $request->header('X-Confirmation-Token'),
-                'was_trashed_first' => $task->deleted_at !== null,
-                'final_deletion_at' => Carbon::now()->toISOString(),
-            ]);
+            try {
+                $this->logTaskDeletion($task, 'force_delete', $request, [
+                    'deletion_reason' => $request->input('reason', 'permanent_cleanup'),
+                    'confirmation_token' => $request->header('X-Confirmation-Token'),
+                    'was_trashed_first' => $task->deleted_at !== null,
+                    'final_deletion_at' => Carbon::now()->toISOString(),
+                ]);
+            } catch (\Exception $e) {
+                // Log the logging error but don't fail the force deletion
+                \Log::warning('Failed to create comprehensive task force deletion log', [
+                    'task_id' => $task->id,
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString()
+                ]);
+            }
             
             // Force delete the task - repository will throw TaskNotFoundException if not found
             $forceDeleteResult = $this->taskRepository->forceDelete($validatedId);
@@ -524,22 +560,47 @@ class TaskController extends Controller
         ];
 
         // Create the primary activity log
-        $this->logService->createTaskActivityLog(
-            $task->id,
-            TaskLog::ACTION_CREATED,
-            [], // No old data for creation
-            $task->toArray(),
-            $userId
-        );
+        try {
+            $this->logService->createTaskActivityLog(
+                $task->id,
+                TaskLog::ACTION_CREATED,
+                [], // No old data for creation
+                $task->toArray(),
+                $userId
+            );
+        } catch (\Exception $e) {
+            \Log::error('Failed to create task activity log for creation', [
+                'task_id' => $task->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            // Continue with fallback logging
+        }
 
         // Create a detailed creation log entry
-        $this->logService->createLog(
-            $task->id,
-            'task_creation_details',
-            $logData,
-            $userId,
-            $this->generateCreationDescription($task, $validatedData)
-        );
+        try {
+            $this->logService->createLog(
+                $task->id,
+                'task_creation_details',
+                $logData,
+                $userId,
+                $this->generateCreationDescription($task, $validatedData)
+            );
+        } catch (\Exception $e) {
+            \Log::error('Failed to create detailed task creation log', [
+                'task_id' => $task->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            // Use basic file logging as fallback
+            $this->logToFileAsFallback('task_creation', [
+                'task_id' => $task->id,
+                'title' => $task->title,
+                'status' => $task->status,
+                'user_id' => $userId,
+                'created_at' => $task->created_at->toISOString()
+            ]);
+        }
 
         // Log any special conditions or notable aspects
         $this->logSpecialCreationConditions($task, $validatedData, $request);
@@ -758,22 +819,46 @@ class TaskController extends Controller
         ];
 
         // Create the primary activity log with before/after data
-        $this->logService->createTaskActivityLog(
-            $updatedTask->id,
-            TaskLog::ACTION_UPDATED,
-            array_intersect_key($originalTask->toArray(), array_flip($changedFields)),
-            array_intersect_key($updatedTask->toArray(), array_flip($changedFields)),
-            $userId
-        );
+        try {
+            $this->logService->createTaskActivityLog(
+                $updatedTask->id,
+                TaskLog::ACTION_UPDATED,
+                array_intersect_key($originalTask->toArray(), array_flip($changedFields)),
+                array_intersect_key($updatedTask->toArray(), array_flip($changedFields)),
+                $userId
+            );
+        } catch (\Exception $e) {
+            \Log::error('Failed to create task activity log for update', [
+                'task_id' => $updatedTask->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+        }
 
         // Create detailed update log entry
-        $this->logService->createLog(
-            $updatedTask->id,
-            'task_update_details',
-            $logData,
-            $userId,
-            $this->generateUpdateDescription($originalTask, $updatedTask, $changedFields)
-        );
+        try {
+            $this->logService->createLog(
+                $updatedTask->id,
+                'task_update_details',
+                $logData,
+                $userId,
+                $this->generateUpdateDescription($originalTask, $updatedTask, $changedFields)
+            );
+        } catch (\Exception $e) {
+            \Log::error('Failed to create detailed task update log', [
+                'task_id' => $updatedTask->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            // Use basic file logging as fallback
+            $this->logToFileAsFallback('task_update', [
+                'task_id' => $updatedTask->id,
+                'title' => $updatedTask->title,
+                'changed_fields' => $changedFields,
+                'user_id' => $userId,
+                'updated_at' => $updatedTask->updated_at->toISOString()
+            ]);
+        }
 
         // Log special update conditions if any
         $this->logSpecialUpdateConditions($originalTask, $updatedTask, $changedFields, $request);
@@ -1497,5 +1582,63 @@ class TaskController extends Controller
         }
         
         return (int) ceil($baseHours);
+    }
+
+    /**
+     * Fallback logging method when primary logging fails
+     * Logs to file system or database as last resort
+     *
+     * @param string $operation
+     * @param array $data
+     * @return void
+     */
+    private function logToFileAsFallback(string $operation, array $data): void
+    {
+        try {
+            // Try to log to Laravel's log system first
+            \Log::channel('single')->info("Fallback logging for {$operation}", [
+                'operation' => $operation,
+                'data' => $data,
+                'timestamp' => Carbon::now()->toISOString(),
+                'reason' => 'Primary logging system failed'
+            ]);
+        } catch (\Exception $e) {
+            // If even file logging fails, try to log to MySQL fallback table
+            try {
+                \DB::table('task_logs_fallback')->insert([
+                    'operation' => $operation,
+                    'data' => json_encode($data),
+                    'error_context' => 'Primary and file logging failed',
+                    'created_at' => Carbon::now(),
+                    'updated_at' => Carbon::now()
+                ]);
+            } catch (\Exception $dbException) {
+                // Last resort: error_log to system
+                error_log("TaskController fallback logging failed for {$operation}: " . json_encode($data));
+            }
+        }
+    }
+
+    /**
+     * Safe logging wrapper that handles failures gracefully
+     *
+     * @param callable $logFunction
+     * @param string $operationType
+     * @param array $fallbackData
+     * @return void
+     */
+    private function safeLog(callable $logFunction, string $operationType, array $fallbackData): void
+    {
+        try {
+            $logFunction();
+        } catch (\Exception $e) {
+            \Log::error("Primary logging failed for {$operationType}", [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'fallback_data' => $fallbackData
+            ]);
+            
+            $this->logToFileAsFallback($operationType, $fallbackData);
+        }
     }
 }

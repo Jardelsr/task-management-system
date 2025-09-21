@@ -28,8 +28,8 @@ return [
             'host' => env('MONGO_HOST', 'mongodb'),
             'port' => env('MONGO_PORT', '27017'),
             'database' => env('MONGO_DATABASE', 'task_logs'),
-            'username' => env('MONGO_USERNAME', ''),
-            'password' => env('MONGO_PASSWORD', ''),
+            'username' => null,
+            'password' => null,
             'options' => [
                 'database' => env('MONGO_DATABASE', 'task_logs'),
             ],

@@ -50,40 +50,25 @@ class LogService implements LogServiceInterface
         ?int $userId = null,
         ?string $description = null
     ): TaskLog {
-        try {
-            $logData = [
-                'task_id' => $taskId,
-                'action' => $action,
-                'user_id' => $userId,
-                'data' => $data,
-                'description' => $description,
-                'ip_address' => request()->ip(),
-                'user_agent' => request()->userAgent(),
-                'created_at' => Carbon::now(),
-            ];
+        $logData = [
+            'task_id' => $taskId,
+            'action' => $action,
+            'user_id' => $userId,
+            'data' => $data,
+            'description' => $description,
+            'ip_address' => request()->ip(),
+            'user_agent' => request()->userAgent(),
+            'created_at' => Carbon::now(),
+        ];
 
-            // Add request context if available
-            if (request()) {
-                $logData['request_id'] = request()->header('X-Request-ID') ?? uniqid();
-                $logData['method'] = request()->method();
-                $logData['url'] = request()->url();
-            }
-
-            return $this->logRepository->create($logData);
-        } catch (\Exception $e) {
-            Log::error('Failed to create log entry', [
-                'task_id' => $taskId,
-                'action' => $action,
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-
-            throw new LoggingException(
-                'Failed to create log entry: ' . $e->getMessage(),
-                'create',
-                ['task_id' => $taskId, 'action' => $action]
-            );
+        // Add request context if available
+        if (request()) {
+            $logData['request_id'] = request()->header('X-Request-ID') ?? uniqid();
+            $logData['method'] = request()->method();
+            $logData['url'] = request()->url();
         }
+
+        return $this->createLogWithRetry($logData, $taskId, $action);
     }
 
     /**
@@ -883,5 +868,229 @@ class LogService implements LogServiceInterface
                 []
             );
         }
+    }
+
+    /**
+     * Create log entry with retry logic and fallback mechanisms
+     *
+     * @param array $logData
+     * @param int $taskId
+     * @param string $action
+     * @param int $maxRetries
+     * @return TaskLog
+     * @throws LoggingException
+     */
+    private function createLogWithRetry(array $logData, int $taskId, string $action, int $maxRetries = 3): TaskLog
+    {
+        $lastException = null;
+        
+        for ($attempt = 1; $attempt <= $maxRetries; $attempt++) {
+            try {
+                // First attempt: Use primary MongoDB repository
+                return $this->logRepository->create($logData);
+                
+            } catch (\MongoDB\Driver\Exception\ConnectionException $e) {
+                $lastException = $e;
+                Log::warning("MongoDB connection failed on attempt {$attempt}/{$maxRetries}", [
+                    'task_id' => $taskId,
+                    'action' => $action,
+                    'error' => $e->getMessage()
+                ]);
+                
+                // Wait before retry (exponential backoff)
+                if ($attempt < $maxRetries) {
+                    usleep(100000 * pow(2, $attempt - 1)); // 0.1s, 0.2s, 0.4s
+                }
+                
+            } catch (\MongoDB\Driver\Exception\RuntimeException $e) {
+                $lastException = $e;
+                Log::warning("MongoDB runtime error on attempt {$attempt}/{$maxRetries}", [
+                    'task_id' => $taskId,
+                    'action' => $action,
+                    'error' => $e->getMessage()
+                ]);
+                
+                // For runtime errors, try fallback immediately
+                break;
+                
+            } catch (\Exception $e) {
+                $lastException = $e;
+                Log::error("Unexpected error during logging attempt {$attempt}/{$maxRetries}", [
+                    'task_id' => $taskId,
+                    'action' => $action,
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString()
+                ]);
+                
+                // For unexpected errors, try fallback immediately
+                break;
+            }
+        }
+        
+        // All MongoDB attempts failed, try fallback mechanisms
+        return $this->createLogWithFallback($logData, $taskId, $action, $lastException);
+    }
+
+    /**
+     * Create log entry using fallback mechanisms when primary logging fails
+     *
+     * @param array $logData
+     * @param int $taskId
+     * @param string $action
+     * @param \Exception|null $originalException
+     * @return TaskLog
+     * @throws LoggingException
+     */
+    private function createLogWithFallback(array $logData, int $taskId, string $action, ?\Exception $originalException = null): TaskLog
+    {
+        Log::info('Attempting fallback logging mechanisms', [
+            'task_id' => $taskId,
+            'action' => $action,
+            'original_error' => $originalException ? $originalException->getMessage() : 'Unknown'
+        ]);
+
+        // Fallback 1: Try MySQL fallback table
+        try {
+            $fallbackData = [
+                'task_id' => $logData['task_id'],
+                'action' => $logData['action'],
+                'user_id' => $logData['user_id'],
+                'data' => json_encode($logData['data']),
+                'description' => $logData['description'],
+                'ip_address' => $logData['ip_address'],
+                'user_agent' => $logData['user_agent'],
+                'request_id' => $logData['request_id'] ?? null,
+                'method' => $logData['method'] ?? null,
+                'url' => $logData['url'] ?? null,
+                'original_error' => $originalException ? $originalException->getMessage() : null,
+                'created_at' => Carbon::now(),
+                'updated_at' => Carbon::now()
+            ];
+
+            \DB::table('task_logs_fallback')->insert($fallbackData);
+            
+            Log::info('Successfully logged to MySQL fallback table', [
+                'task_id' => $taskId,
+                'action' => $action
+            ]);
+
+            // Create a minimal TaskLog object for return compatibility
+            return $this->createFallbackTaskLogObject($logData);
+            
+        } catch (\Exception $e) {
+            Log::error('MySQL fallback logging failed', [
+                'task_id' => $taskId,
+                'action' => $action,
+                'error' => $e->getMessage()
+            ]);
+        }
+
+        // Fallback 2: File system logging
+        try {
+            $this->logToFileSystem($logData, $taskId, $action);
+            
+            Log::info('Successfully logged to file system fallback', [
+                'task_id' => $taskId,
+                'action' => $action
+            ]);
+
+            // Create a minimal TaskLog object for return compatibility
+            return $this->createFallbackTaskLogObject($logData);
+            
+        } catch (\Exception $e) {
+            Log::error('File system fallback logging failed', [
+                'task_id' => $taskId,
+                'action' => $action,
+                'error' => $e->getMessage()
+            ]);
+        }
+
+        // Fallback 3: System error log
+        try {
+            $errorLogData = [
+                'timestamp' => Carbon::now()->toISOString(),
+                'task_id' => $taskId,
+                'action' => $action,
+                'data' => $logData,
+                'all_fallbacks_failed' => true
+            ];
+            
+            error_log('TaskLog Fallback: ' . json_encode($errorLogData));
+            
+            Log::critical('All logging mechanisms failed, logged to system error log', [
+                'task_id' => $taskId,
+                'action' => $action
+            ]);
+
+            // Create a minimal TaskLog object for return compatibility
+            return $this->createFallbackTaskLogObject($logData);
+            
+        } catch (\Exception $e) {
+            // This is the last resort - if this fails, we throw the exception
+            throw new LoggingException(
+                'All logging mechanisms failed including system error log: ' . $e->getMessage(),
+                'all_fallbacks_failed',
+                [
+                    'task_id' => $taskId, 
+                    'action' => $action,
+                    'original_error' => $originalException ? $originalException->getMessage() : 'Unknown'
+                ]
+            );
+        }
+    }
+
+    /**
+     * Log to file system as fallback
+     *
+     * @param array $logData
+     * @param int $taskId
+     * @param string $action
+     * @return void
+     * @throws \Exception
+     */
+    private function logToFileSystem(array $logData, int $taskId, string $action): void
+    {
+        $logFile = storage_path('logs/task_logs_fallback.log');
+        $logEntry = [
+            'timestamp' => Carbon::now()->toISOString(),
+            'level' => 'INFO',
+            'message' => 'Fallback task log entry',
+            'context' => [
+                'task_id' => $taskId,
+                'action' => $action,
+                'data' => $logData,
+                'source' => 'LogService::logToFileSystem'
+            ]
+        ];
+
+        $logLine = json_encode($logEntry) . PHP_EOL;
+        
+        if (file_put_contents($logFile, $logLine, FILE_APPEND | LOCK_EX) === false) {
+            throw new \Exception('Failed to write to fallback log file');
+        }
+    }
+
+    /**
+     * Create a minimal TaskLog object for return compatibility when using fallbacks
+     *
+     * @param array $logData
+     * @return TaskLog
+     */
+    private function createFallbackTaskLogObject(array $logData): TaskLog
+    {
+        // Create a minimal TaskLog object that doesn't save to database
+        $taskLog = new TaskLog();
+        $taskLog->setAttribute('_id', uniqid('fallback_'));
+        $taskLog->setAttribute('task_id', $logData['task_id']);
+        $taskLog->setAttribute('action', $logData['action']);
+        $taskLog->setAttribute('user_id', $logData['user_id']);
+        $taskLog->setAttribute('data', $logData['data']);
+        $taskLog->setAttribute('description', $logData['description']);
+        $taskLog->setAttribute('ip_address', $logData['ip_address']);
+        $taskLog->setAttribute('user_agent', $logData['user_agent']);
+        $taskLog->setAttribute('created_at', $logData['created_at']);
+        $taskLog->setAttribute('fallback_used', true);
+        
+        return $taskLog;
     }
 }

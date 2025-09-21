@@ -54,8 +54,10 @@ $app->configure('api');
 |--------------------------------------------------------------------------
 */
 
-$app->register(Illuminate\Database\DatabaseServiceProvider::class);
+// Register MongoDB service provider FIRST, before database service provider
 $app->register(MongoDB\Laravel\MongoDBServiceProvider::class);
+$app->register(App\Providers\MongoDBServiceProvider::class);
+$app->register(Illuminate\Database\DatabaseServiceProvider::class);
 $app->register(App\Providers\AppServiceProvider::class);
 
 /*
