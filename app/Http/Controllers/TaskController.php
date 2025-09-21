@@ -1697,13 +1697,18 @@ class TaskController extends Controller
         } catch (\Exception $e) {
             // If even file logging fails, try to log to MySQL fallback table
             try {
-                \DB::table('task_logs_fallback')->insert([
-                    'operation' => $operation,
-                    'data' => json_encode($data),
+                // Sanitize data before inserting to prevent SQL injection
+                $sqlProtectionService = app(\App\Services\SqlInjectionProtectionService::class);
+                
+                $sanitizedData = [
+                    'operation' => $sqlProtectionService->sanitizeInput($operation, 'fallback.operation'),
+                    'data' => json_encode($sqlProtectionService->sanitizeInput($data, 'fallback.data')),
                     'error_context' => 'Primary and file logging failed',
                     'created_at' => Carbon::now(),
                     'updated_at' => Carbon::now()
-                ]);
+                ];
+                
+                \DB::table('task_logs_fallback')->insert($sanitizedData);
             } catch (\Exception $dbException) {
                 // Last resort: error_log to system
                 error_log("TaskController fallback logging failed for {$operation}: " . json_encode($data));

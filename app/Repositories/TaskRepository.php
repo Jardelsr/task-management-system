@@ -6,9 +6,16 @@ use App\Models\Task;
 use Illuminate\Database\Eloquent\Collection;
 use Carbon\Carbon;
 use App\Services\DatabaseConnectionService;
+use App\Services\SqlInjectionProtectionService;
 
 class TaskRepository implements TaskRepositoryInterface
 {
+    private SqlInjectionProtectionService $sqlProtectionService;
+
+    public function __construct(SqlInjectionProtectionService $sqlProtectionService)
+    {
+        $this->sqlProtectionService = $sqlProtectionService;
+    }
     /**
      * Find all tasks, optionally filtered by status
      *
@@ -20,6 +27,8 @@ class TaskRepository implements TaskRepositoryInterface
         $query = Task::query();
         
         if ($status !== null) {
+            // Sanitize status input for SQL injection protection
+            $status = $this->sqlProtectionService->sanitizeInput($status, 'task_status_filter');
             $query->byStatus($status);
         }
         
@@ -213,6 +222,9 @@ class TaskRepository implements TaskRepositoryInterface
      */
     public function findByStatus(string $status): Collection
     {
+        // Sanitize status input for SQL injection protection
+        $status = $this->sqlProtectionService->sanitizeInput($status, 'task_status_lookup');
+        
         return Task::byStatus($status)
             ->orderBy('created_at', 'desc')
             ->get();
@@ -253,6 +265,8 @@ class TaskRepository implements TaskRepositoryInterface
         $query = Task::query();
         
         if ($status !== null) {
+            // Sanitize status input for SQL injection protection
+            $status = $this->sqlProtectionService->sanitizeInput($status, 'task_status_count');
             $query->byStatus($status);
         }
         

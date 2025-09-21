@@ -222,15 +222,32 @@ trait SecurityErrorHandlingTrait
     }
 
     /**
-     * Sanitize input data
+     * Enhanced input sanitization using InputSanitizationService
      *
+     * @param mixed $data
+     * @param array $typeMap Field to type mapping (optional)
+     * @param array $options Sanitization options (optional)
+     * @return mixed
+     */
+    protected function sanitizeInput($data, array $typeMap = [], array $options = [])
+    {
+        // Get the InputSanitizationService instance
+        $sanitizationService = app(\App\Services\InputSanitizationService::class);
+        
+        return $sanitizationService->sanitizeInput($data, $typeMap, $options);
+    }
+
+    /**
+     * Legacy sanitize method for backward compatibility
+     * 
+     * @deprecated Use sanitizeInput() instead
      * @param mixed $data
      * @return mixed
      */
-    protected function sanitizeInput($data)
+    protected function legacySanitizeInput($data)
     {
         if (is_array($data)) {
-            return array_map([$this, 'sanitizeInput'], $data);
+            return array_map([$this, 'legacySanitizeInput'], $data);
         }
 
         if (is_string($data)) {

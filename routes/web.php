@@ -24,43 +24,58 @@
 |--------------------------------------------------------------------------
 */
 
-// System health endpoints
-$router->get('/health', 'HealthController@getHealth');
-$router->get('/health/database/{connection}', 'HealthController@testConnection');
-$router->get('/health/config', 'HealthController@getDatabaseConfig');
+// System health endpoints with burst rate limiting
+$router->group(['middleware' => ['throttle:burst']], function () use ($router) {
+    $router->get('/health', 'HealthController@getHealth');
+    $router->get('/health/database/{connection}', 'HealthController@testConnection');
+    $router->get('/health/config', 'HealthController@getDatabaseConfig');
+});
 
-// Health check and API overview route
-$router->get('/', function () use ($router) {
-    return response()->json([
-        'message' => 'Task Management System API',
-        'version' => $router->app->version(),
-        'api_version' => 'v1.0',
-        'status' => 'active',
-        'environment' => app()->environment(),
-        'timestamp' => \Carbon\Carbon::now()->toISOString(),
-        'documentation' => [
-            'main' => url('/api/v1/docs'),
-            'info' => url('/api/v1/info'),
-            'openapi' => url('/api/v1/openapi.json')
-        ],
-        'endpoints' => [
-            'api_v1' => [
-                'tasks' => url('/api/v1/tasks'),
-                'logs' => url('/api/v1/logs')
+// Test endpoint for rate limiting (low limit for easy testing)
+$router->group(['middleware' => ['throttle:test']], function () use ($router) {
+    $router->get('/test-rate-limit', function () {
+        return response()->json([
+            'message' => 'Rate limiting test endpoint',
+            'timestamp' => time(),
+            'limit' => 'test profile (5 requests per minute)'
+        ]);
+    });
+});
+
+// Health check and API overview route with API rate limiting
+$router->group(['middleware' => ['throttle:api']], function () use ($router) {
+    $router->get('/', function () use ($router) {
+        return response()->json([
+            'message' => 'Task Management System API',
+            'version' => $router->app->version(),
+            'api_version' => 'v1.0',
+            'status' => 'active',
+            'environment' => app()->environment(),
+            'timestamp' => \Carbon\Carbon::now()->toISOString(),
+            'documentation' => [
+                'main' => url('/api/v1/docs'),
+                'info' => url('/api/v1/info'),
+                'openapi' => url('/api/v1/openapi.json')
             ],
-            'legacy' => [
-                'tasks' => url('/tasks'),
-                'logs' => url('/logs')
+            'endpoints' => [
+                'api_v1' => [
+                    'tasks' => url('/api/v1/tasks'),
+                    'logs' => url('/api/v1/logs')
+                ],
+                'legacy' => [
+                    'tasks' => url('/tasks'),
+                    'logs' => url('/logs')
+                ]
+            ],
+            'features' => [
+                'versioned_api',
+                'soft_deletes',
+                'audit_logging',
+                'filtering_pagination',
+                'validation'
             ]
-        ],
-        'features' => [
-            'versioned_api',
-            'soft_deletes',
-            'audit_logging',
-            'filtering_pagination',
-            'validation'
-        ]
-    ]);
+        ]);
+    });
 });
 
 /*
@@ -73,7 +88,7 @@ $router->get('/', function () use ($router) {
 
 $router->group([
     'prefix' => 'api/v1',
-    'middleware' => [] // Add middleware when available: ['api', 'throttle', 'cors']
+    'middleware' => ['throttle:api'] // Rate limiting for API endpoints
 ], function () use ($router) {
 
     /*
@@ -289,7 +304,7 @@ $router->group([
 
 $router->group([
     'prefix' => 'admin',
-    'middleware' => [] // Add admin middleware: ['auth', 'admin']
+    'middleware' => ['throttle:strict'] // Stricter rate limiting for admin routes
 ], function () use ($router) {
     
     // System status and monitoring
@@ -358,7 +373,7 @@ $router->group([
 
 $router->group([
     'prefix' => '',
-    'middleware' => [] // Legacy routes use minimal middleware
+    'middleware' => ['throttle:default'] // Basic rate limiting for legacy routes
 ], function () use ($router) {
 
     /*

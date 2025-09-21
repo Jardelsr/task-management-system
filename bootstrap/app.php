@@ -21,6 +21,9 @@ $app = new Laravel\Lumen\Application(
 $app->withFacades();
 $app->withEloquent();
 
+// Enable cache functionality for rate limiting
+$app->register(Illuminate\Cache\CacheServiceProvider::class);
+
 /*
 |--------------------------------------------------------------------------
 | Register Container Bindings
@@ -50,6 +53,7 @@ $app->configure('api');
 $app->configure('validation_messages');
 $app->configure('log_responses');
 $app->configure('logging');
+$app->configure('cache');
 
 /*
 |--------------------------------------------------------------------------
@@ -57,9 +61,16 @@ $app->configure('logging');
 |--------------------------------------------------------------------------
 */
 
-// Register the logging middleware
+// Register the logging middleware and SQL injection protection
 $app->middleware([
-    App\Http\Middleware\RequestResponseLoggingMiddleware::class
+    App\Http\Middleware\RequestResponseLoggingMiddleware::class,
+    App\Http\Middleware\SqlInjectionProtectionMiddleware::class,
+    App\Http\Middleware\SecurityValidationMiddleware::class
+]);
+
+// Register route middleware
+$app->routeMiddleware([
+    'throttle' => App\Http\Middleware\RateLimitingMiddleware::class,
 ]);
 
 /*
@@ -73,6 +84,7 @@ $app->register(MongoDB\Laravel\MongoDBServiceProvider::class);
 $app->register(App\Providers\MongoDBConnectionServiceProvider::class);
 $app->register(App\Providers\LoggingServiceProvider::class);
 $app->register(App\Providers\ValidationServiceProvider::class);
+$app->register(App\Providers\SqlInjectionProtectionServiceProvider::class);
 $app->register(App\Providers\AppServiceProvider::class);
 
 /*

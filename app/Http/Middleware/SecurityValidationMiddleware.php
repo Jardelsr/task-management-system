@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
 use App\Traits\SecurityErrorHandlingTrait;
+use App\Traits\ErrorResponseTrait;
 use App\Exceptions\RateLimitException;
 
 /**
@@ -15,6 +16,7 @@ use App\Exceptions\RateLimitException;
 class SecurityValidationMiddleware
 {
     use SecurityErrorHandlingTrait;
+    use ErrorResponseTrait;
 
     /**
      * Handle an incoming request with comprehensive security validation
@@ -183,30 +185,42 @@ class SecurityValidationMiddleware
      */
     private function isSuspiciousUserAgent(?string $userAgent): bool
     {
+        // Allow empty user agents for API clients (common in server-to-server communication)
         if (empty($userAgent)) {
-            return true; // No user agent is suspicious
+            return false;
         }
 
-        $suspiciousPatterns = [
-            'curl',
-            'wget',
-            'python',
-            'bot',
-            'crawler',
-            'scanner',
-            'sqlmap',
-            'nikto',
-            'nmap'
+        // Only block clearly malicious user agents, not legitimate tools
+        $maliciousPatterns = [
+            'sqlmap',           // SQL injection tool
+            'nikto',            // Web vulnerability scanner
+            'nmap',             // Network mapper (when used as user agent)
+            'masscan',          // Mass IP port scanner
+            'zmap',             // Fast internet-wide scanner
+            'dirb',             // Web content scanner
+            'dirbuster',        // Directory/file brute forcer
+            'gobuster',         // Directory/DNS/VHost busting tool
+            'wfuzz',            // Web application fuzzer
+            'burp',             // Burp Suite scanner
+            'acunetix',         // Web vulnerability scanner
+            'nessus',           // Vulnerability scanner
+            'openvas',          // Vulnerability scanner
+            'w3af',             // Web application attack framework
+            'havij',            // SQL injection tool
+            'pangolin',         // SQL injection tool
+            'bsqlbf',           // Blind SQL injection tool
         ];
 
         $userAgentLower = strtolower($userAgent);
         
-        foreach ($suspiciousPatterns as $pattern) {
+        foreach ($maliciousPatterns as $pattern) {
             if (strpos($userAgentLower, $pattern) !== false) {
                 return true;
             }
         }
 
+        // Allow legitimate tools and API clients
+        // curl, wget, postman, legitimate bots are now allowed
         return false;
     }
 
@@ -274,17 +288,78 @@ class SecurityValidationMiddleware
     private function addSecurityHeaders($response)
     {
         if ($response instanceof JsonResponse || method_exists($response, 'header')) {
+            // Prevent content type sniffing
             $response->header('X-Content-Type-Options', 'nosniff');
+            
+            // Prevent clickjacking
             $response->header('X-Frame-Options', 'DENY');
+            
+            // XSS Protection (deprecated but still useful for older browsers)
             $response->header('X-XSS-Protection', '1; mode=block');
+            
+            // Referrer policy
             $response->header('Referrer-Policy', 'strict-origin-when-cross-origin');
-            $response->header('Content-Security-Policy', "default-src 'self'");
+            
+            // Comprehensive Content Security Policy
+            $csp = implode('; ', [
+                "default-src 'self'",
+                "script-src 'self'",
+                "style-src 'self' 'unsafe-inline'",
+                "img-src 'self' data:",
+                "font-src 'self'",
+                "connect-src 'self'",
+                "media-src 'self'",
+                "object-src 'none'",
+                "child-src 'self'",
+                "frame-ancestors 'none'",
+                "base-uri 'self'",
+                "form-action 'self'"
+            ]);
+            $response->header('Content-Security-Policy', $csp);
+            
+            // HTTP Strict Transport Security (HSTS) - 1 year with includeSubDomains
+            if (request()->isSecure()) {
+                $response->header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
+            }
+            
+            // Permissions Policy (replaces Feature-Policy)
+            $permissions = implode(', ', [
+                'camera=()',
+                'microphone=()',
+                'geolocation=()',
+                'payment=()',
+                'usb=()',
+                'magnetometer=()',
+                'accelerometer=()',
+                'gyroscope=()',
+                'fullscreen=(self)',
+                'display-capture=()'
+            ]);
+            $response->header('Permissions-Policy', $permissions);
+            
+            // Cross-Origin policies
+            $response->header('Cross-Origin-Embedder-Policy', 'require-corp');
+            $response->header('Cross-Origin-Opener-Policy', 'same-origin');
+            $response->header('Cross-Origin-Resource-Policy', 'same-origin');
+            
+            // Server information hiding
+            $response->header('Server', 'TaskManagementAPI/1.0');
+            
+            // Cache control for security
+            if (request()->getPathInfo() !== '/health-check') {
+                $response->header('Cache-Control', 'no-cache, no-store, must-revalidate, private');
+                $response->header('Pragma', 'no-cache');
+                $response->header('Expires', '0');
+            }
             
             // Add request ID for tracking
             $response->header('X-Request-ID', uniqid('req_', true));
             
             // Add rate limit info if available
             $response->header('X-Rate-Limit-Policy', 'IP-based limiting in effect');
+            
+            // Security timestamp
+            $response->header('X-Security-Headers-Applied', date('c'));
         }
 
         return $response;
@@ -387,5 +462,38 @@ class SecurityValidationMiddleware
         ];
         
         file_put_contents($cacheFile, json_encode($data));
+    }
+
+    /**
+     * Override securityErrorResponse to add security headers to error responses
+     *
+     * @param string $message
+     * @param array $logData
+     * @return JsonResponse
+     */
+    protected function securityErrorResponse(
+        string $message = 'Security validation failed',
+        array $logData = []
+    ): JsonResponse {
+        // Log the security incident
+        Log::warning('Security error response generated', array_merge([
+            'message' => $message,
+            'ip' => request()->ip(),
+            'user_agent' => request()->userAgent(),
+            'url' => request()->fullUrl(),
+            'method' => request()->method(),
+        ], $logData));
+
+        // Create error response
+        $response = $this->errorResponse(
+            'Request validation failed',
+            'The request could not be processed due to invalid data',
+            400,
+            [],
+            'SECURITY_VALIDATION_FAILED'
+        );
+
+        // Apply security headers to the error response
+        return $this->addSecurityHeaders($response);
     }
 }

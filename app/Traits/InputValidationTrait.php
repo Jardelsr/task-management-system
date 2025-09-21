@@ -15,12 +15,14 @@ trait InputValidationTrait
     use SecurityErrorHandlingTrait;
 
     /**
-     * Comprehensive input validation with sanitization
+     * Comprehensive input validation with advanced sanitization
      *
      * @param array $data
      * @param array $rules
      * @param array $messages
      * @param bool $sanitize
+     * @param array $typeMap Field to type mapping for advanced sanitization
+     * @param array $sanitizeOptions Global sanitization options
      * @return array
      * @throws TaskValidationException
      */
@@ -28,14 +30,20 @@ trait InputValidationTrait
         array $data,
         array $rules,
         array $messages = [],
-        bool $sanitize = true
+        bool $sanitize = true,
+        array $typeMap = [],
+        array $sanitizeOptions = []
     ): array {
         // First, validate request size and structure
         $this->validateRequestSize($data);
 
-        // Sanitize input if requested
+        // Enhanced sanitization with type mapping if requested
         if ($sanitize) {
-            $data = $this->sanitizeInput($data);
+            if (!empty($typeMap)) {
+                $data = $this->sanitizeInput($data, $typeMap, $sanitizeOptions);
+            } else {
+                $data = $this->sanitizeInput($data);
+            }
         }
 
         // Security validation
@@ -53,6 +61,31 @@ trait InputValidationTrait
         }
 
         return $validator->validated();
+    }
+
+    /**
+     * Validate and sanitize input with field-specific type mapping
+     *
+     * @param array $data
+     * @param array $rules
+     * @param array $typeMap Field to sanitization type mapping
+     * @param array $messages
+     * @return array
+     * @throws TaskValidationException
+     */
+    protected function validateWithTypedSanitization(
+        array $data,
+        array $rules,
+        array $typeMap = [],
+        array $messages = []
+    ): array {
+        return $this->validateAndSanitizeInput(
+            $data,
+            $rules,
+            $messages,
+            true,
+            $typeMap
+        );
     }
 
     /**

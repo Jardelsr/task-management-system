@@ -98,21 +98,26 @@ class EnhancedLogService implements LogServiceInterface
         ?string $description
     ): TaskLog {
         try {
-            // Insert into a MySQL fallback table
-            $logId = DB::connection('mysql')->table('task_logs_fallback')->insertGetId([
+            // Sanitize inputs to prevent SQL injection
+            $sqlProtectionService = app(\App\Services\SqlInjectionProtectionService::class);
+            
+            $sanitizedData = [
                 'task_id' => $taskId,
-                'action' => $action,
+                'action' => $sqlProtectionService->sanitizeInput($action, 'mysql_fallback.action'),
                 'user_id' => $userId,
-                'data' => json_encode($data),
-                'description' => $description,
-                'ip_address' => request()->ip(),
-                'user_agent' => request()->userAgent(),
-                'request_id' => request()->header('X-Request-ID') ?? uniqid(),
-                'method' => request()->method(),
-                'url' => request()->url(),
+                'data' => json_encode($sqlProtectionService->sanitizeInput($data, 'mysql_fallback.data')),
+                'description' => $sqlProtectionService->sanitizeInput($description, 'mysql_fallback.description'),
+                'ip_address' => $sqlProtectionService->sanitizeInput(request()->ip(), 'mysql_fallback.ip'),
+                'user_agent' => $sqlProtectionService->sanitizeInput(request()->userAgent(), 'mysql_fallback.user_agent'),
+                'request_id' => $sqlProtectionService->sanitizeInput(request()->header('X-Request-ID') ?? uniqid(), 'mysql_fallback.request_id'),
+                'method' => $sqlProtectionService->sanitizeInput(request()->method(), 'mysql_fallback.method'),
+                'url' => $sqlProtectionService->sanitizeInput(request()->url(), 'mysql_fallback.url'),
                 'created_at' => Carbon::now(),
                 'updated_at' => Carbon::now(),
-            ]);
+            ];
+            
+            // Insert into a MySQL fallback table
+            $logId = DB::connection('mysql')->table('task_logs_fallback')->insertGetId($sanitizedData);
 
             // Create a TaskLog object to maintain interface compatibility
             $taskLog = new TaskLog();
@@ -201,14 +206,20 @@ class EnhancedLogService implements LogServiceInterface
         try {
             return $this->logRepository->findByTask($taskId, $limit);
         } catch (\Exception $e) {
-            // Fallback to MySQL query
-            $offset = ($page - 1) * $limit;
+            // Fallback to MySQL query with SQL injection protection
+            $sqlProtectionService = app(\App\Services\SqlInjectionProtectionService::class);
+            
+            // Sanitize inputs
+            $sanitizedTaskId = $sqlProtectionService->sanitizeInput($taskId, 'mysql_query.task_id');
+            $sanitizedLimit = $sqlProtectionService->sanitizeLimit($limit, 1000);
+            $sanitizedOffset = $sqlProtectionService->sanitizeOffset(($page - 1) * $sanitizedLimit);
+
             $logs = DB::connection('mysql')
                 ->table('task_logs_fallback')
-                ->where('task_id', $taskId)
+                ->where('task_id', '=', $sanitizedTaskId)
                 ->orderBy('created_at', 'desc')
-                ->limit($limit)
-                ->offset($offset)
+                ->limit($sanitizedLimit)
+                ->offset($sanitizedOffset)
                 ->get();
 
             return $logs->map(function ($log) {

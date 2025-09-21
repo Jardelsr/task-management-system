@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Services\LogServiceInterface;
 use App\Services\LogResponseFormatter;
+use App\Services\SqlInjectionProtectionService;
 use App\Repositories\LogRepositoryInterface;
 use App\Models\TaskLog;
 use App\Exceptions\LoggingException;
@@ -1186,7 +1187,15 @@ class LogService implements LogServiceInterface
                 'updated_at' => Carbon::now()
             ];
 
-            \DB::table('task_logs_fallback')->insert($fallbackData);
+            // Sanitize fallback data before inserting to prevent SQL injection
+            $sqlProtectionService = app(SqlInjectionProtectionService::class);
+            
+            $sanitizedFallbackData = [];
+            foreach ($fallbackData as $key => $value) {
+                $sanitizedFallbackData[$key] = $sqlProtectionService->sanitizeInput($value, "fallback.{$key}");
+            }
+
+            \DB::table('task_logs_fallback')->insert($sanitizedFallbackData);
             
             Log::info('Successfully logged to MySQL fallback table', [
                 'task_id' => $taskId,

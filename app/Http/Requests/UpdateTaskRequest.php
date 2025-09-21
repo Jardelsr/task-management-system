@@ -10,6 +10,52 @@ use Carbon\Carbon;
 class UpdateTaskRequest extends FormRequest
 {
     /**
+     * Get field type mapping for sanitization
+     *
+     * @return array
+     */
+    public function typeMap(): array
+    {
+        return [
+            'title' => 'string',
+            'description' => 'string',
+            'status' => 'string',
+            'assigned_to' => 'integer',
+            'created_by' => 'integer',
+            'due_date' => 'string',
+            'priority' => 'string'
+        ];
+    }
+
+    /**
+     * Get sanitization options for specific fields
+     *
+     * @return array
+     */
+    public function sanitizationOptions(): array
+    {
+        return [
+            'title' => [
+                'max_length' => 255,
+                'skip_html_encode' => false,
+                'allow_newlines' => false
+            ],
+            'description' => [
+                'max_length' => 1000,
+                'skip_html_encode' => false,
+                'allow_newlines' => true
+            ],
+            'assigned_to' => [
+                'min' => 1,
+                'max' => 999999
+            ],
+            'created_by' => [
+                'min' => 1,
+                'max' => 999999
+            ]
+        ];
+    }
+    /**
      * Get the validation rules that apply to the request.
      *
      * @return array
