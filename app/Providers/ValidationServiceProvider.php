@@ -86,5 +86,38 @@ class ValidationServiceProvider extends ServiceProvider
             return str_replace([':attribute', ':years'], [$attribute, $maxYears], 
                 'The :attribute cannot be more than :years years in the future.');
         });
+
+        // Custom rule to prevent object/array validation errors
+        $validator->extend('scalar_value', function ($attribute, $value, $parameters, $validator) {
+            return is_scalar($value) || is_null($value);
+        });
+        
+        // Custom rule message for scalar_value
+        $validator->replacer('scalar_value', function ($message, $attribute, $rule, $parameters) {
+            return str_replace(':attribute', $attribute, 'The :attribute must be a simple value, not an object or array.');
+        });
+
+        // Custom rule to check if value is not an object or array (early validation)
+        $validator->extend('not_object', function ($attribute, $value, $parameters, $validator) {
+            if (is_object($value) || is_array($value)) {
+                return false;
+            }
+            return true;
+        });
+        
+        // Custom rule message for not_object
+        $validator->replacer('not_object', function ($message, $attribute, $rule, $parameters) {
+            return str_replace(':attribute', $attribute, 'The :attribute field must be a simple value, not an object or array.');
+        });
+
+        // Custom rule to reject boolean values
+        $validator->extend('not_boolean', function ($attribute, $value, $parameters, $validator) {
+            return !is_bool($value);
+        });
+        
+        // Custom rule message for not_boolean
+        $validator->replacer('not_boolean', function ($message, $attribute, $rule, $parameters) {
+            return str_replace(':attribute', $attribute, 'The :attribute field must not be a boolean value.');
+        });
     }
 }

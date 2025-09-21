@@ -16,6 +16,7 @@ use Illuminate\Http\JsonResponse;
 use App\Models\Task;
 use App\Models\TaskLog;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
 
 class TaskController extends Controller
@@ -120,108 +121,193 @@ class TaskController extends Controller
     public function store(Request $request): JsonResponse
     {
         try {
-            // Use FormRequest for validation
-            $createRequest = CreateTaskRequest::createFromRequest($request);
-            $validatedData = $createRequest->validated();
+            $startTime = microtime(true);
             
-            $task = $this->taskRepository->create($validatedData);
-            
-            // Enhanced logging for task creation
-            try {
-                $this->logTaskCreation($task, $validatedData, $request);
-            } catch (\Exception $e) {
-                // Log the logging error but don't fail the creation
-                \Log::warning('Failed to create comprehensive task creation log', [
+            // Rate limiting for task creation
+            $this->checkRateLimit(
+                'task_create:' . request()->ip(),
+                100, // 100 tasks per hour
+                3600
+            );
+
+            // Validate request size and structure
+            $this->validateRequestSize($request->all(), 10, 5); // 10KB max, 5 levels deep
+
+            return $this->handleDatabaseOperation(function () use ($request, $startTime) {
+                // Use FormRequest for validation with security checks
+                $createRequest = CreateTaskRequest::createFromRequest($request);
+                $validatedData = $createRequest->validated();
+                
+                // Additional security validation
+                $this->validateRequestSecurity($validatedData);
+                
+                $task = $this->taskRepository->create($validatedData);
+                
+                // Enhanced logging for task creation with error handling
+                $this->handleWithFallback(
+                    function () use ($task, $validatedData, $request) {
+                        $this->logTaskCreation($task, $validatedData, $request);
+                    },
+                    function () use ($task) {
+                        // Fallback logging
+                        \Log::info('Task created (fallback log)', [
+                            'task_id' => $task->id,
+                            'title' => $task->title,
+                            'timestamp' => Carbon::now()->toISOString()
+                        ]);
+                    },
+                    'task_creation_logging'
+                );
+                
+                // Performance metrics logging
+                $executionTime = microtime(true) - $startTime;
+                $this->logPerformanceMetrics('task_create', $executionTime, [
                     'task_id' => $task->id,
-                    'error' => $e->getMessage(),
-                    'trace' => $e->getTraceAsString()
+                    'data_size_kb' => round(strlen(json_encode($validatedData)) / 1024, 2)
                 ]);
-            }
+                
+                return $this->createdResponse($task->toArray(), 'Task created successfully');
+            }, 'task_creation');
             
-            return $this->createdResponse($task->toArray(), 'Task created successfully');
         } catch (TaskValidationException $e) {
             throw $e;
+        } catch (\Exception $e) {
+            Log::error('Unexpected error in task creation', [
+                'error' => $e->getMessage(),
+                'request_data' => $request->all(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            
+            throw new TaskOperationException(
+                'Failed to create task: ' . $e->getMessage(),
+                'store',
+                null,
+                500
+            );
         }
     }
 
     public function update(Request $request, int $id): JsonResponse
     {
         try {
+            $startTime = microtime(true);
+            
             // Validate task ID format
             $validatedId = ValidationHelper::validateTaskId($id);
             
-            // Find the existing task - repository will throw TaskNotFoundException if not found
-            $task = $this->taskRepository->findById($validatedId);
+            // Rate limiting for task updates
+            $this->checkRateLimit(
+                'task_update:' . request()->ip(),
+                200, // 200 updates per hour
+                3600
+            );
+
+            // Concurrent operation protection
+            return $this->handleConcurrentOperation(
+                "task_update_{$validatedId}",
+                function () use ($request, $validatedId, $startTime) {
+                    return $this->handleDatabaseOperation(function () use ($request, $validatedId, $startTime) {
+                        // Find the existing task
+                        $task = $this->taskRepository->findById($validatedId);
+                        
+                        if (!$task) {
+                            throw new TaskNotFoundException(
+                                $validatedId,
+                                'update',
+                                'Task not found for update operation',
+                                ['operation' => 'update', 'possible_reasons' => ['Task does not exist', 'Task was deleted', 'Invalid task ID']]
+                            );
+                        }
+
+                        // Validate request size and structure
+                        $this->validateRequestSize($request->all(), 10, 5);
+                        
+                        // Use FormRequest for validation with security checks
+                        $updateRequest = UpdateTaskRequest::createFromRequest($request);
+                        $validatedData = $updateRequest->validated();
+
+                        // Security validation
+                        $this->validateRequestSecurity($validatedData);
+
+                        // Skip update if no valid data provided
+                        if (empty($validatedData)) {
+                            return $this->successResponse(
+                                $task->toArray(), 
+                                'No valid data provided for update'
+                            );
+                        }
+
+                        // Store original data for comparison
+                        $originalData = $task->toArray();
+
+                        // Perform the partial update
+                        $updatedTask = $this->taskRepository->update($validatedId, $validatedData);
+
+                        // Determine what fields were actually changed
+                        $changedFields = $this->getChangedFields($originalData, $updatedTask->toArray());
+
+                        // Enhanced comprehensive logging for task update
+                        $this->handleWithFallback(
+                            function () use ($task, $updatedTask, $request, $validatedData, $changedFields) {
+                                $this->logTaskUpdate(
+                                    $task, 
+                                    $updatedTask, 
+                                    $request->all(), 
+                                    $validatedData, 
+                                    $changedFields, 
+                                    $request
+                                );
+                            },
+                            function () use ($updatedTask, $changedFields) {
+                                // Fallback logging
+                                \Log::info('Task updated (fallback log)', [
+                                    'task_id' => $updatedTask->id,
+                                    'changed_fields' => array_keys($changedFields),
+                                    'timestamp' => Carbon::now()->toISOString()
+                                ]);
+                            },
+                            'task_update_logging'
+                        );
+                        
+                        // Performance metrics logging
+                        $executionTime = microtime(true) - $startTime;
+                        $this->logPerformanceMetrics('task_update', $executionTime, [
+                            'task_id' => $updatedTask->id,
+                            'changed_fields_count' => count($changedFields),
+                            'data_size_kb' => round(strlen(json_encode($validatedData)) / 1024, 2)
+                        ]);
+
+                        return $this->successResponse(
+                            $updatedTask->toArray(), 
+                            'Task updated successfully',
+                            200,
+                            [
+                                'changed_fields' => array_keys($changedFields),
+                                'changes_count' => count($changedFields)
+                            ]
+                        );
+                    }, 'task_update');
+                },
+                'task_update'
+            );
             
-            if (!$task) {
-                throw new TaskNotFoundException(
-                    $validatedId,
-                    'update',
-                    'Task not found for update operation',
-                    ['operation' => 'update', 'possible_reasons' => ['Task does not exist', 'Task was deleted', 'Invalid task ID']]
-                );
-            }
-
-            // Use FormRequest for validation
-            $updateRequest = UpdateTaskRequest::createFromRequest($request);
-            $validatedData = $updateRequest->validated();
-
-            // Skip update if no valid data provided
-            if (empty($validatedData)) {
-                return $this->successResponse(
-                    $task->toArray(), 
-                    'No valid data provided for update'
-                );
-            }
-
-            // Store original data for comparison
-            $originalData = $task->toArray();
-
-            // Perform the partial update - repository will throw TaskNotFoundException if task doesn't exist
-            $updatedTask = $this->taskRepository->update($validatedId, $validatedData);
-
-            // Determine what fields were actually changed
-            $changedFields = $this->getChangedFields($originalData, $updatedTask->toArray());
-
-            // Enhanced comprehensive logging for task update
-            try {
-                $this->logTaskUpdate(
-                    $task, 
-                    $updatedTask, 
-                    $inputData, 
-                    $validator->validated(), 
-                    $changedFields, 
-                    $request
-                );
-            } catch (\Exception $e) {
-                // Log the logging error but don't fail the update
-                \Log::warning('Failed to create comprehensive task update log', [
-                    'task_id' => $updatedTask->id,
-                    'error' => $e->getMessage(),
-                    'trace' => $e->getTraceAsString()
-                ]);
-            }
-
-            // Create appropriate response based on changes
-            $message = empty($changedFields) 
-                ? 'Task update requested but no changes were made'
-                : 'Task updated successfully. Changed fields: ' . implode(', ', $changedFields);
-
-            $response = $this->updatedResponse($updatedTask->toArray(), $message);
-            
-            // Add validation metadata to response
-            $response->header('X-Validation-Version', '2.0');
-            $response->header('X-Changed-Fields', implode(',', $changedFields));
-            
-            return $response;
-            
-        } catch (TaskNotFoundException | TaskValidationException | TaskOperationException $e) {
+        } catch (TaskNotFoundException $e) {
+            throw $e;
+        } catch (TaskValidationException $e) {
             throw $e;
         } catch (\Exception $e) {
+            Log::error('Unexpected error in task update', [
+                'task_id' => $id,
+                'error' => $e->getMessage(),
+                'request_data' => $request->all(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            
             throw new TaskOperationException(
-                'Unexpected error during task update: ' . $e->getMessage(),
+                'Failed to update task: ' . $e->getMessage(),
                 'update',
-                $id
+                $id,
+                500
             );
         }
     }

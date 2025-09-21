@@ -11,6 +11,7 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\HttpKernel\Exception\MethodNotAllowedHttpException;
 use Illuminate\Http\JsonResponse;
 use App\Traits\ErrorResponseTrait;
+use App\Http\Responses\ValidationErrorFormatter;
 use Throwable;
 
 class Handler extends ExceptionHandler
@@ -28,6 +29,8 @@ class Handler extends ExceptionHandler
         ModelNotFoundException::class,
         ValidationException::class,
         TaskNotFoundException::class,
+        TaskValidationException::class,
+        RateLimitException::class, // Don't report rate limit exceptions
         TaskValidationException::class,
     ];
 
@@ -82,6 +85,18 @@ class Handler extends ExceptionHandler
      */
     public function render($request, Throwable $exception)
     {
+        // Handle rate limiting exceptions first (high priority)
+        if ($exception instanceof RateLimitException) {
+            $response = response()->json($exception->getErrorDetails(), $exception->getCode());
+            
+            // Add rate limiting headers
+            foreach ($exception->getHttpHeaders() as $header => $value) {
+                $response->header($header, $value);
+            }
+            
+            return $response;
+        }
+
         // Handle custom task exceptions with enhanced logging
         if ($exception instanceof TaskNotFoundException) {
             return response()->json($exception->getErrorDetails(), $exception->getCode());
@@ -134,12 +149,12 @@ class Handler extends ExceptionHandler
             );
         }
 
-        // Handle Laravel validation exceptions
+        // Handle Laravel validation exceptions with enhanced formatting
         if ($exception instanceof ValidationException) {
-            return $this->validationErrorResponse(
-                $exception->errors(),
-                'The given data was invalid'
-            );
+            return ValidationErrorFormatter::fromValidationException($exception, [
+                'request_method' => $request->method(),
+                'request_path' => $request->path(),
+            ]);
         }
 
         // Handle model not found exceptions - convert to our custom format

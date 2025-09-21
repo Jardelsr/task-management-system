@@ -36,7 +36,7 @@ class CreateTaskRequest extends FormRequest
     public static function getValidationRules(): array
     {
         return [
-            'title' => 'required|string|max:255|min:1',
+            'title' => 'required|string|max:255|min:3|regex:/^[\p{L}\p{N}\s\-_.,!?():;]+$/u|not_regex:/[\n\r\t]/',
             'description' => 'nullable|string|max:1000',
             'status' => [
                 'sometimes',
@@ -44,8 +44,8 @@ class CreateTaskRequest extends FormRequest
                 'string',
                 Rule::in(Task::getAvailableStatuses())
             ],
-            'created_by' => 'nullable|integer|min:1',
-            'assigned_to' => 'nullable|integer|min:1',
+            'created_by' => 'nullable|bail|integer|min:1',
+            'assigned_to' => 'nullable|bail|integer|min:1',
             'due_date' => 'nullable|date|after:now',
             'priority' => 'sometimes|nullable|string|in:low,medium,high'
         ];

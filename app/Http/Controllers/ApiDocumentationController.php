@@ -9,7 +9,7 @@ use Carbon\Carbon;
  * API Documentation Controller
  * 
  * Provides comprehensive API documentation, OpenAPI specifications,
- * and interactive documentation endpoints.
+ * and interactive documentation endpoints with robust error handling.
  */
 class ApiDocumentationController extends Controller
 {
@@ -20,84 +20,93 @@ class ApiDocumentationController extends Controller
      */
     public function index(): JsonResponse
     {
-        return $this->successResponse([
-            'api' => [
-                'name' => 'Task Management System API',
-                'version' => 'v1.0',
-                'description' => 'Comprehensive task management with audit logging',
-                'base_url' => url('/api/v1'),
-                'last_updated' => Carbon::now()->toISOString()
-            ],
-            'authentication' => [
-                'type' => 'planned',
-                'methods' => ['bearer_token', 'api_key'],
-                'note' => 'Authentication system planned for future release'
-            ],
-            'resources' => [
-                'tasks' => [
-                    'description' => 'Complete task lifecycle management',
-                    'endpoints' => [
-                        'collection' => [
-                            'GET /api/v1/tasks' => [
-                                'description' => 'List all tasks with filtering and pagination',
-                                'parameters' => ['status', 'assigned_to', 'created_by', 'overdue', 'sort', 'page', 'limit']
-                            ],
-                            'POST /api/v1/tasks' => [
-                                'description' => 'Create a new task',
-                                'required' => ['title'],
-                                'optional' => ['description', 'status', 'due_date', 'assigned_to']
-                            ],
-                            'GET /api/v1/tasks/stats' => [
-                                'description' => 'Get comprehensive task statistics',
-                                'returns' => 'counts by status, overdue tasks, completion rates'
-                            ],
-                            'GET /api/v1/tasks/trashed' => [
-                                'description' => 'List soft-deleted tasks',
-                                'note' => 'Supports restore operations'
-                            ],
-                            'POST /api/v1/tasks/bulk' => [
-                                'description' => 'Create multiple tasks in single request',
-                                'parameters' => 'Array of task objects'
+        try {
+            // Rate limiting for documentation requests
+            $this->checkRateLimit(
+                'documentation:' . request()->ip(),
+                100, // 100 requests
+                3600 // per hour
+            );
+
+            return $this->handleOperationWithTimeout(function () {
+                return $this->successResponse([
+                    'api' => [
+                        'name' => 'Task Management System API',
+                        'version' => 'v1.0',
+                        'description' => 'Comprehensive task management with audit logging',
+                        'base_url' => url('/api/v1'),
+                        'last_updated' => Carbon::now()->toISOString()
+                    ],
+                    'authentication' => [
+                        'type' => 'planned',
+                        'methods' => ['bearer_token', 'api_key'],
+                        'note' => 'Authentication system planned for future release'
+                    ],
+                    'resources' => [
+                        'tasks' => [
+                            'description' => 'Complete task lifecycle management',
+                            'endpoints' => [
+                                'collection' => [
+                                    'GET /api/v1/tasks' => [
+                                        'description' => 'List all tasks with filtering and pagination',
+                                        'parameters' => ['status', 'assigned_to', 'created_by', 'overdue', 'sort', 'page', 'limit']
+                                    ],
+                                    'POST /api/v1/tasks' => [
+                                        'description' => 'Create a new task',
+                                        'required' => ['title'],
+                                        'optional' => ['description', 'status', 'due_date', 'assigned_to']
+                                    ],
+                                    'GET /api/v1/tasks/stats' => [
+                                        'description' => 'Get comprehensive task statistics',
+                                        'returns' => 'counts by status, overdue tasks, completion rates'
+                                    ],
+                                    'GET /api/v1/tasks/trashed' => [
+                                        'description' => 'List soft-deleted tasks',
+                                        'note' => 'Supports restore operations'
+                                    ],
+                                    'POST /api/v1/tasks/bulk' => [
+                                        'description' => 'Create multiple tasks in single request',
+                                        'parameters' => 'Array of task objects'
+                                    ]
+                                ],
+                                'resource' => [
+                                    'GET /api/v1/tasks/{id}' => [
+                                        'description' => 'Show a specific task with details',
+                                        'includes' => 'creation/update timestamps, soft delete status'
+                                    ],
+                                    'PUT /api/v1/tasks/{id}' => [
+                                        'description' => 'Full update of task (all fields)',
+                                        'note' => 'Missing fields will be set to default values'
+                                    ],
+                                    'PATCH /api/v1/tasks/{id}' => [
+                                        'description' => 'Partial update (only provided fields)',
+                                        'note' => 'Preferred method for updates'
+                                    ],
+                                    'DELETE /api/v1/tasks/{id}' => [
+                                        'description' => 'Soft delete a task (recoverable)',
+                                        'note' => 'Task remains in database, can be restored'
+                                    ]
+                                ],
+                                'operations' => [
+                                    'POST /api/v1/tasks/{id}/restore' => [
+                                        'description' => 'Restore a soft-deleted task',
+                                        'status_code' => 200
+                                    ],
+                                    'DELETE /api/v1/tasks/{id}/force' => [
+                                        'description' => 'Permanently delete a task (irreversible)',
+                                        'status_code' => 204,
+                                        'warning' => 'This action cannot be undone'
+                                    ],
+                                    'POST /api/v1/tasks/{id}/complete' => [
+                                        'description' => 'Mark task as completed',
+                                        'note' => 'Sets completion timestamp automatically'
+                                    ],
+                                    'POST /api/v1/tasks/{id}/assign' => [
+                                        'description' => 'Assign task to a user',
+                                        'parameters' => ['user_id']
+                                    ]
+                                ]
                             ]
-                        ],
-                        'resource' => [
-                            'GET /api/v1/tasks/{id}' => [
-                                'description' => 'Show a specific task with details',
-                                'includes' => 'creation/update timestamps, soft delete status'
-                            ],
-                            'PUT /api/v1/tasks/{id}' => [
-                                'description' => 'Full update of task (all fields)',
-                                'note' => 'Missing fields will be set to default values'
-                            ],
-                            'PATCH /api/v1/tasks/{id}' => [
-                                'description' => 'Partial update (only provided fields)',
-                                'note' => 'Preferred method for updates'
-                            ],
-                            'DELETE /api/v1/tasks/{id}' => [
-                                'description' => 'Soft delete a task (recoverable)',
-                                'note' => 'Task remains in database, can be restored'
-                            ]
-                        ],
-                        'operations' => [
-                            'POST /api/v1/tasks/{id}/restore' => [
-                                'description' => 'Restore a soft-deleted task',
-                                'status_code' => 200
-                            ],
-                            'DELETE /api/v1/tasks/{id}/force' => [
-                                'description' => 'Permanently delete a task (irreversible)',
-                                'status_code' => 204,
-                                'warning' => 'This action cannot be undone'
-                            ],
-                            'POST /api/v1/tasks/{id}/complete' => [
-                                'description' => 'Mark task as completed',
-                                'note' => 'Sets completion timestamp automatically'
-                            ],
-                            'POST /api/v1/tasks/{id}/assign' => [
-                                'description' => 'Assign task to a user',
-                                'parameters' => ['user_id']
-                            ]
-                        ]
-                    ]
                 ],
                 'logs' => [
                     'description' => 'Comprehensive audit trail and activity logs',
@@ -160,6 +169,27 @@ class ApiDocumentationController extends Controller
                 'note' => 'Planned feature - not yet implemented'
             ]
         ], 'API Documentation Retrieved Successfully');
+            }, 'api_documentation', 15); // 15 second timeout
+
+        } catch (\Exception $e) {
+            return $this->handleWithFallback(
+                function () use ($e) {
+                    throw $e;
+                },
+                function () {
+                    // Fallback to minimal documentation
+                    return $this->successResponse([
+                        'api' => [
+                            'name' => 'Task Management System API',
+                            'version' => 'v1.0',
+                            'status' => 'partial_data_available'
+                        ],
+                        'message' => 'Full documentation temporarily unavailable'
+                    ], 'Partial API Documentation Retrieved');
+                },
+                'api_documentation_fallback'
+            );
+        }
     }
 
     /**
@@ -169,6 +199,18 @@ class ApiDocumentationController extends Controller
      */
     public function openapi(): JsonResponse
     {
+        try {
+            // Validate request for potential malicious patterns
+            $this->validateRequestSecurity(request()->all());
+            
+            // Rate limiting for OpenAPI spec requests
+            $this->checkRateLimit(
+                'openapi:' . request()->ip(),
+                50, // 50 requests
+                3600 // per hour  
+            );
+
+            return $this->handleOperationWithTimeout(function () {
         $spec = [
             'openapi' => '3.0.0',
             'info' => [
@@ -312,8 +354,196 @@ class ApiDocumentationController extends Controller
             ]
         ];
 
-        return response()->json($spec, 200, [
-            'Content-Type' => 'application/json'
-        ]);
+                return response()->json($spec, 200, [
+                    'Content-Type' => 'application/json'
+                ]);
+            }, 'openapi_generation', 10); // 10 second timeout
+            
+        } catch (\Exception $e) {
+            Log::error('OpenAPI generation failed', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            
+            return $this->serverErrorResponse(
+                'OpenAPI specification generation failed', 
+                ['error_type' => get_class($e)]
+            );
+        }
+    }
+
+    /**
+     * Get API health status with comprehensive error checking
+     *
+     * @return JsonResponse
+     */
+    public function health(): JsonResponse
+    {
+        try {
+            $startTime = microtime(true);
+            
+            // Check database connectivity
+            $dbStatus = $this->checkDatabaseHealth();
+            
+            // Check storage accessibility
+            $storageStatus = $this->checkStorageHealth();
+            
+            // Check memory usage
+            $memoryStatus = $this->checkMemoryHealth();
+            
+            $executionTime = microtime(true) - $startTime;
+            
+            $healthStatus = [
+                'status' => 'healthy',
+                'timestamp' => Carbon::now()->toISOString(),
+                'version' => '1.0.0',
+                'checks' => [
+                    'database' => $dbStatus,
+                    'storage' => $storageStatus,
+                    'memory' => $memoryStatus
+                ],
+                'performance' => [
+                    'response_time_ms' => round($executionTime * 1000, 2)
+                ]
+            ];
+            
+            // Determine overall status
+            $allChecksHealthy = collect($healthStatus['checks'])->every(function ($check) {
+                return $check['status'] === 'healthy';
+            });
+            
+            if (!$allChecksHealthy) {
+                $healthStatus['status'] = 'degraded';
+            }
+            
+            $statusCode = $allChecksHealthy ? 200 : 503;
+            
+            return response()->json($healthStatus, $statusCode);
+            
+        } catch (\Exception $e) {
+            Log::error('Health check failed', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            
+            return response()->json([
+                'status' => 'unhealthy',
+                'timestamp' => Carbon::now()->toISOString(),
+                'error' => 'Health check failed',
+                'message' => config('app.debug') ? $e->getMessage() : 'Internal server error'
+            ], 503);
+        }
+    }
+
+    /**
+     * Check database health
+     *
+     * @return array
+     */
+    private function checkDatabaseHealth(): array
+    {
+        try {
+            $startTime = microtime(true);
+            DB::connection()->getPdo();
+            $responseTime = microtime(true) - $startTime;
+            
+            return [
+                'status' => 'healthy',
+                'response_time_ms' => round($responseTime * 1000, 2),
+                'connection' => 'active'
+            ];
+        } catch (\Exception $e) {
+            return [
+                'status' => 'unhealthy',
+                'error' => 'Database connection failed',
+                'details' => config('app.debug') ? $e->getMessage() : 'Connection error'
+            ];
+        }
+    }
+
+    /**
+     * Check storage health
+     *
+     * @return array
+     */
+    private function checkStorageHealth(): array
+    {
+        try {
+            $storagePath = storage_path();
+            $testFile = $storagePath . '/health_check_' . time() . '.tmp';
+            
+            // Test write
+            file_put_contents($testFile, 'health_check');
+            
+            // Test read
+            $content = file_get_contents($testFile);
+            
+            // Cleanup
+            unlink($testFile);
+            
+            if ($content !== 'health_check') {
+                throw new \Exception('File content mismatch');
+            }
+            
+            return [
+                'status' => 'healthy',
+                'writable' => true,
+                'readable' => true
+            ];
+        } catch (\Exception $e) {
+            return [
+                'status' => 'unhealthy',
+                'error' => 'Storage access failed',
+                'details' => config('app.debug') ? $e->getMessage() : 'Storage error'
+            ];
+        }
+    }
+
+    /**
+     * Check memory health
+     *
+     * @return array
+     */
+    private function checkMemoryHealth(): array
+    {
+        $memoryUsage = memory_get_usage(true);
+        $memoryLimit = $this->getMemoryLimit();
+        $memoryUsagePercent = ($memoryUsage / $memoryLimit) * 100;
+        
+        $status = $memoryUsagePercent > 90 ? 'unhealthy' : 
+                 ($memoryUsagePercent > 75 ? 'warning' : 'healthy');
+        
+        return [
+            'status' => $status,
+            'usage_bytes' => $memoryUsage,
+            'usage_mb' => round($memoryUsage / 1024 / 1024, 2),
+            'limit_mb' => round($memoryLimit / 1024 / 1024, 2),
+            'usage_percent' => round($memoryUsagePercent, 2)
+        ];
+    }
+
+    /**
+     * Get memory limit in bytes
+     *
+     * @return int
+     */
+    private function getMemoryLimit(): int
+    {
+        $memoryLimit = ini_get('memory_limit');
+        
+        if ($memoryLimit == -1) {
+            return PHP_INT_MAX; // No limit
+        }
+        
+        // Convert to bytes
+        $lastChar = strtolower($memoryLimit[strlen($memoryLimit) - 1]);
+        $numeric = (int)substr($memoryLimit, 0, -1);
+        
+        return match ($lastChar) {
+            'g' => $numeric * 1024 * 1024 * 1024,
+            'm' => $numeric * 1024 * 1024,
+            'k' => $numeric * 1024,
+            default => (int)$memoryLimit,
+        };
     }
 }

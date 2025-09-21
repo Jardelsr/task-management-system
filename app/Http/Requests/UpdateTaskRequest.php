@@ -37,7 +37,7 @@ class UpdateTaskRequest extends FormRequest
     public static function getValidationRules(): array
     {
         return [
-            'title' => 'sometimes|required|string|min:3|max:255|regex:/^[\p{L}\p{N}\s\-_.,!?()]+$/u',
+            'title' => 'sometimes|required|string|min:3|max:255|regex:/^[\p{L}\p{N}\s\-_.,!?():;]+$/u|not_regex:/[\n\r\t]/',
             'description' => 'sometimes|nullable|string|max:1000',
             'status' => [
                 'sometimes',
@@ -45,8 +45,8 @@ class UpdateTaskRequest extends FormRequest
                 'string',
                 Rule::in(Task::getAvailableStatuses())
             ],
-            'assigned_to' => 'sometimes|nullable|integer|min:1|max:999999',
-            'created_by' => 'sometimes|nullable|integer|min:1|max:999999',
+            'assigned_to' => 'sometimes|nullable|bail|integer|min:1|max:999999',
+            'created_by' => 'sometimes|nullable|bail|integer|min:1|max:999999',
             'due_date' => [
                 'sometimes',
                 'nullable',
@@ -54,6 +54,7 @@ class UpdateTaskRequest extends FormRequest
                 'after:now',
                 'before:' . Carbon::now()->addYears(10)->toDateString()
             ],
+            'priority' => 'sometimes|nullable|string|in:low,medium,high',
             'completed_at' => 'sometimes|nullable|date|before_or_equal:now'
         ];
     }
@@ -100,6 +101,21 @@ class UpdateTaskRequest extends FormRequest
                         'date',
                         'before_or_equal:now'
                     ];
+                }
+                
+                // Special handling for priority
+                if ($field === 'priority') {
+                    $rules[$field] = [
+                        'sometimes',
+                        'nullable',
+                        'string',
+                        'in:low,medium,high'
+                    ];
+                }
+                
+                // Special handling for assigned_to with boolean check
+                if ($field === 'assigned_to') {
+                    $rules[$field] = 'sometimes|nullable|bail|integer|min:1|max:999999';
                 }
             }
         }
