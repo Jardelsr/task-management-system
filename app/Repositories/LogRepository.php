@@ -329,4 +329,155 @@ class LogRepository implements LogRepositoryInterface
         
         return $query->count();
     }
+
+    /**
+     * Get total count of logs with filters
+     *
+     * @param array $filters
+     * @return int
+     */
+    public function getTotalCount(array $filters = []): int
+    {
+        return $this->countWithFilters($filters);
+    }
+
+    /**
+     * Get comprehensive log statistics
+     *
+     * @param Carbon|null $startDate
+     * @param Carbon|null $endDate
+     * @return array
+     */
+    public function getStatistics(?Carbon $startDate = null, ?Carbon $endDate = null): array
+    {
+        $query = TaskLog::query();
+        
+        if ($startDate && $endDate) {
+            $query->whereBetween('created_at', [$startDate, $endDate]);
+        }
+        
+        $totalLogs = $query->count();
+        
+        $logsByAction = $query->groupBy('action')
+            ->selectRaw('action, count(*) as count')
+            ->pluck('count', 'action')
+            ->toArray();
+            
+        $recentActivity = $query->where('created_at', '>=', Carbon::now()->subDays(7))
+            ->groupBy('action')
+            ->selectRaw('action, count(*) as count')
+            ->pluck('count', 'action')
+            ->toArray();
+
+        return [
+            'total_logs' => $totalLogs,
+            'logs_by_action' => [
+                'created' => $logsByAction['created'] ?? 0,
+                'updated' => $logsByAction['updated'] ?? 0,
+                'deleted' => $logsByAction['deleted'] ?? 0,
+                'restored' => $logsByAction['restored'] ?? 0,
+            ],
+            'recent_activity' => $recentActivity,
+            'date_range' => [
+                'from' => $startDate?->toISOString(),
+                'to' => $endDate?->toISOString()
+            ]
+        ];
+    }
+
+    /**
+     * Clean up old logs based on retention policy
+     *
+     * @param int $retentionDays
+     * @return int Number of deleted logs
+     */
+    public function cleanupOldLogs(int $retentionDays = 90): int
+    {
+        $cutoffDate = Carbon::now()->subDays($retentionDays);
+        return TaskLog::where('created_at', '<', $cutoffDate)->delete();
+    }
+
+    /**
+     * Export logs to array format
+     *
+     * @param array $filters
+     * @return array
+     */
+    public function exportLogs(array $filters = []): array
+    {
+        $query = TaskLog::query();
+        
+        // Apply filters
+        if (!empty($filters['task_id'])) {
+            $query->where('task_id', $filters['task_id']);
+        }
+
+        if (!empty($filters['action'])) {
+            $query->where('action', $filters['action']);
+        }
+
+        if (!empty($filters['user_id'])) {
+            $query->where('user_id', $filters['user_id']);
+        }
+
+        if (!empty($filters['date_from']) && !empty($filters['date_to'])) {
+            $query->whereBetween('created_at', [
+                Carbon::parse($filters['date_from']),
+                Carbon::parse($filters['date_to'])
+            ]);
+        }
+        
+        return $query->orderBy('created_at', 'desc')
+            ->limit($filters['limit'] ?? 1000)
+            ->get()
+            ->toArray();
+    }
+
+    /**
+     * Find logs by task ID and multiple actions
+     *
+     * @param int $taskId
+     * @param array $actions
+     * @param int $limit
+     * @return Collection
+     */
+    public function findByTaskAndActions(int $taskId, array $actions, int $limit = 50): Collection
+    {
+        return TaskLog::where('task_id', $taskId)
+            ->whereIn('action', $actions)
+            ->orderBy('created_at', 'desc')
+            ->limit($limit)
+            ->get();
+    }
+
+    /**
+     * Find recent logs by multiple actions
+     *
+     * @param array $actions
+     * @param int $limit
+     * @return Collection
+     */
+    public function findRecentByActions(array $actions, int $limit = 100): Collection
+    {
+        return TaskLog::whereIn('action', $actions)
+            ->orderBy('created_at', 'desc')
+            ->limit($limit)
+            ->get();
+    }
+
+    /**
+     * Find logs by actions between dates
+     *
+     * @param array $actions
+     * @param Carbon $startDate
+     * @param Carbon $endDate
+     * @return Collection
+     */
+    public function findByActionsBetweenDates(array $actions, Carbon $startDate, Carbon $endDate): Collection
+    {
+        return TaskLog::whereIn('action', $actions)
+            ->whereBetween('created_at', [$startDate, $endDate])
+            ->orderBy('created_at', 'desc')
+            ->get();
+    }
 }

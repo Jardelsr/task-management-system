@@ -4,6 +4,7 @@ namespace App\Repositories;
 
 use App\Models\Task;
 use Illuminate\Database\Eloquent\Collection;
+use Carbon\Carbon;
 
 class TaskRepository implements TaskRepositoryInterface
 {
@@ -36,17 +37,31 @@ class TaskRepository implements TaskRepositoryInterface
     }
 
     /**
-     * Create a new task
+     * Create a new task with enhanced logging and validation
      *
      * @param array $data
      * @return Task
      * @throws \App\Exceptions\DatabaseException
+     * @throws \App\Exceptions\TaskOperationException
      */
     public function create(array $data): Task
     {
         try {
-            return Task::create($data);
+            // Pre-creation hooks
+            $this->beforeTaskCreation($data);
+            
+            // Apply defaults and sanitization
+            $data = $this->prepareTaskData($data);
+            
+            // Create the task
+            $task = Task::create($data);
+            
+            // Post-creation hooks
+            $this->afterTaskCreation($task, $data);
+            
+            return $task;
         } catch (\Illuminate\Database\QueryException $e) {
+            $this->logDatabaseError('create', $e, $data);
             throw new \App\Exceptions\DatabaseException(
                 'Failed to create task: ' . $e->getMessage(),
                 'create',
@@ -54,6 +69,7 @@ class TaskRepository implements TaskRepositoryInterface
                 500
             );
         } catch (\Exception $e) {
+            $this->logUnexpectedError('create', $e, $data);
             throw new \App\Exceptions\TaskOperationException(
                 'Unexpected error during task creation: ' . $e->getMessage(),
                 'create',
@@ -84,6 +100,13 @@ class TaskRepository implements TaskRepositoryInterface
 
             // Store original data for logging
             $originalData = $task->toArray();
+            
+            // Log the update attempt with request details
+            $this->logUpdateAttempt($id, $data, $data, true, null, [
+                'original_task_status' => $task->status,
+                'original_task_priority' => $task->priority,
+                'has_assignment' => $task->assigned_to !== null,
+            ]);
             
             // Filter out empty/null values for partial updates
             $updateData = array_filter($data, function($value) {
@@ -417,7 +440,7 @@ class TaskRepository implements TaskRepositoryInterface
     }
 
     /**
-     * Log task update operation
+     * Enhanced logging for task update operations
      *
      * @param int $taskId
      * @param array $originalData
@@ -428,26 +451,303 @@ class TaskRepository implements TaskRepositoryInterface
     private function logTaskUpdate(int $taskId, array $originalData, array $updatedData, array $changedFields): void
     {
         try {
-            // Only log if there are actual changes
+            // Build detailed change analysis
             $changes = [];
+            $significantChanges = [];
+            
             foreach ($changedFields as $field => $newValue) {
                 $oldValue = $originalData[$field] ?? null;
                 if ($oldValue !== $newValue) {
-                    $changes[$field] = [
+                    $changeData = [
                         'old' => $oldValue,
-                        'new' => $newValue
+                        'new' => $newValue,
+                        'type' => $this->getChangeTypeForField($oldValue, $newValue),
+                        'field_category' => $this->getFieldCategory($field),
                     ];
+                    
+                    $changes[$field] = $changeData;
+                    
+                    // Track significant changes
+                    if ($this->isSignificantChange($field, $oldValue, $newValue)) {
+                        $significantChanges[] = $field;
+                    }
                 }
             }
 
             if (!empty($changes)) {
-                \App\Models\TaskLog::logUpdated($taskId, $originalData, $updatedData);
+                // Log with enhanced metadata
+                \App\Models\TaskLog::create([
+                    'task_id' => $taskId,
+                    'action' => \App\Models\TaskLog::ACTION_UPDATED,
+                    'old_data' => $originalData,
+                    'new_data' => $updatedData,
+                    'user_id' => 1, // Default to system user
+                    'metadata' => [
+                        'repository_operation' => 'update',
+                        'changed_fields' => array_keys($changes),
+                        'field_changes' => $changes,
+                        'significant_changes' => $significantChanges,
+                        'change_summary' => $this->generateUpdateSummary($changes),
+                        'update_context' => [
+                            'total_fields_changed' => count($changes),
+                            'has_status_change' => isset($changes['status']),
+                            'has_priority_change' => isset($changes['priority']),
+                            'has_assignment_change' => isset($changes['assigned_to']),
+                            'has_due_date_change' => isset($changes['due_date']),
+                        ],
+                        'performance_metrics' => [
+                            'update_timestamp' => Carbon::now()->toISOString(),
+                            'processing_node' => gethostname(),
+                        ]
+                    ],
+                    'description' => $this->generateRepositoryUpdateDescription($changes),
+                    'ip_address' => request()->ip() ?? '127.0.0.1',
+                    'user_agent' => request()->userAgent() ?? 'System/Repository',
+                    'created_at' => Carbon::now(),
+                ]);
             }
         } catch (\Exception $e) {
-            // Log the logging error but don't fail the update
-            \Log::error('Failed to log task update', [
+            // Enhanced error logging
+            \Log::error('Failed to log task update from repository', [
                 'task_id' => $taskId,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'original_data_keys' => array_keys($originalData),
+                'updated_data_keys' => array_keys($updatedData),
+                'changed_fields' => array_keys($changedFields),
+            ]);
+        }
+    }
+
+    /**
+     * Determine change type for a specific field
+     *
+     * @param mixed $oldValue
+     * @param mixed $newValue
+     * @return string
+     */
+    private function getChangeTypeForField($oldValue, $newValue): string
+    {
+        if ($oldValue === null && $newValue !== null) {
+            return 'added';
+        }
+        if ($oldValue !== null && $newValue === null) {
+            return 'removed';
+        }
+        if ($oldValue !== $newValue) {
+            return 'modified';
+        }
+        return 'unchanged';
+    }
+
+    /**
+     * Categorize field for better organization
+     *
+     * @param string $field
+     * @return string
+     */
+    private function getFieldCategory(string $field): string
+    {
+        $categories = [
+            'title' => 'content',
+            'description' => 'content',
+            'status' => 'workflow',
+            'priority' => 'workflow',
+            'assigned_to' => 'assignment',
+            'due_date' => 'scheduling',
+            'created_by' => 'metadata',
+            'created_at' => 'metadata',
+            'updated_at' => 'metadata',
+        ];
+
+        return $categories[$field] ?? 'other';
+    }
+
+    /**
+     * Determine if a field change is significant
+     *
+     * @param string $field
+     * @param mixed $oldValue
+     * @param mixed $newValue
+     * @return bool
+     */
+    private function isSignificantChange(string $field, $oldValue, $newValue): bool
+    {
+        $significantFields = ['status', 'priority', 'assigned_to', 'due_date', 'title'];
+        
+        if (!in_array($field, $significantFields)) {
+            return false;
+        }
+
+        // Special cases for specific fields
+        switch ($field) {
+            case 'status':
+                return $newValue === Task::STATUS_COMPLETED || $oldValue === Task::STATUS_COMPLETED;
+            case 'priority':
+                $priorities = ['low' => 1, 'medium' => 2, 'high' => 3, 'urgent' => 4];
+                return abs(($priorities[$newValue] ?? 2) - ($priorities[$oldValue] ?? 2)) > 1;
+            case 'assigned_to':
+                return $oldValue === null || $newValue === null; // Assignment or unassignment
+            default:
+                return true;
+        }
+    }
+
+    /**
+     * Generate a summary of the update changes
+     *
+     * @param array $changes
+     * @return string
+     */
+    private function generateUpdateSummary(array $changes): string
+    {
+        $summaries = [];
+        
+        foreach ($changes as $field => $change) {
+            switch ($field) {
+                case 'status':
+                    $summaries[] = "Status: {$change['old']} → {$change['new']}";
+                    break;
+                case 'priority':
+                    $summaries[] = "Priority: {$change['old']} → {$change['new']}";
+                    break;
+                case 'assigned_to':
+                    $oldUser = $change['old'] ? "user {$change['old']}" : 'unassigned';
+                    $newUser = $change['new'] ? "user {$change['new']}" : 'unassigned';
+                    $summaries[] = "Assignment: {$oldUser} → {$newUser}";
+                    break;
+                case 'title':
+                    $summaries[] = "Title updated";
+                    break;
+                case 'due_date':
+                    $summaries[] = "Due date updated";
+                    break;
+                default:
+                    $summaries[] = ucfirst($field) . " updated";
+            }
+        }
+
+        return implode(', ', $summaries);
+    }
+
+    /**
+     * Generate repository-level update description
+     *
+     * @param array $changes
+     * @return string
+     */
+    private function generateRepositoryUpdateDescription(array $changes): string
+    {
+        $fieldCount = count($changes);
+        $fieldNames = array_keys($changes);
+        
+        if ($fieldCount === 1) {
+            return "Repository: Updated {$fieldNames[0]} field";
+        } elseif ($fieldCount <= 3) {
+            return "Repository: Updated " . implode(', ', $fieldNames) . " fields";
+        } else {
+            return "Repository: Updated {$fieldCount} fields (" . implode(', ', array_slice($fieldNames, 0, 3)) . "...)";
+        }
+    }
+
+    /**
+     * Log update attempts (including failed ones) for debugging and audit purposes
+     *
+     * @param int $taskId
+     * @param array $requestData
+     * @param array $validatedData
+     * @param bool $success
+     * @param string|null $errorMessage
+     * @param array $context
+     * @return void
+     */
+    public function logUpdateAttempt(
+        int $taskId, 
+        array $requestData, 
+        array $validatedData, 
+        bool $success = true, 
+        ?string $errorMessage = null,
+        array $context = []
+    ): void {
+        try {
+            \App\Models\TaskLog::create([
+                'task_id' => $taskId,
+                'action' => 'update_attempt',
+                'old_data' => [],
+                'new_data' => [],
+                'user_id' => 1,
+                'metadata' => [
+                    'attempt_status' => $success ? 'success' : 'failed',
+                    'request_data' => $requestData,
+                    'validated_data' => $validatedData,
+                    'error_message' => $errorMessage,
+                    'attempt_context' => $context,
+                    'performance_metrics' => [
+                        'attempt_timestamp' => Carbon::now()->toISOString(),
+                        'processing_node' => gethostname(),
+                        'memory_usage' => memory_get_usage(true),
+                        'memory_peak' => memory_get_peak_usage(true),
+                    ],
+                    'request_analysis' => [
+                        'fields_requested' => array_keys($requestData),
+                        'fields_validated' => array_keys($validatedData),
+                        'fields_filtered_out' => array_diff(array_keys($requestData), array_keys($validatedData)),
+                        'has_partial_data' => count($requestData) !== count($validatedData),
+                    ]
+                ],
+                'description' => $success 
+                    ? "Update attempt successful for task {$taskId}" 
+                    : "Update attempt failed for task {$taskId}: {$errorMessage}",
+                'ip_address' => request()->ip() ?? '127.0.0.1',
+                'user_agent' => request()->userAgent() ?? 'System/Repository',
+                'created_at' => Carbon::now(),
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Failed to log update attempt', [
+                'task_id' => $taskId,
+                'error' => $e->getMessage(),
+                'attempt_success' => $success,
+                'original_error' => $errorMessage,
+            ]);
+        }
+    }
+
+    /**
+     * Log field-level changes for detailed audit trails
+     *
+     * @param int $taskId
+     * @param string $fieldName
+     * @param mixed $oldValue
+     * @param mixed $newValue
+     * @param array $metadata
+     * @return void
+     */
+    public function logFieldChange(int $taskId, string $fieldName, $oldValue, $newValue, array $metadata = []): void
+    {
+        try {
+            \App\Models\TaskLog::create([
+                'task_id' => $taskId,
+                'action' => 'field_change',
+                'old_data' => [$fieldName => $oldValue],
+                'new_data' => [$fieldName => $newValue],
+                'user_id' => 1,
+                'metadata' => array_merge([
+                    'field_name' => $fieldName,
+                    'change_type' => $this->getChangeTypeForField($oldValue, $newValue),
+                    'field_category' => $this->getFieldCategory($fieldName),
+                    'is_significant' => $this->isSignificantChange($fieldName, $oldValue, $newValue),
+                    'change_timestamp' => Carbon::now()->toISOString(),
+                ], $metadata),
+                'description' => "Field '{$fieldName}' changed from '" . json_encode($oldValue) . "' to '" . json_encode($newValue) . "'",
+                'ip_address' => request()->ip() ?? '127.0.0.1',
+                'user_agent' => request()->userAgent() ?? 'System/Repository',
+                'created_at' => Carbon::now(),
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Failed to log field change', [
+                'task_id' => $taskId,
+                'field_name' => $fieldName,
+                'error' => $e->getMessage(),
             ]);
         }
     }
@@ -508,5 +808,177 @@ class TaskRepository implements TaskRepositoryInterface
                 'error' => $e->getMessage()
             ]);
         }
+    }
+
+    /**
+     * Hook executed before task creation
+     *
+     * @param array $data
+     * @return void
+     */
+    private function beforeTaskCreation(array $data): void
+    {
+        // Log the creation attempt
+        \Log::info('Task creation initiated', [
+            'data' => $data,
+            'timestamp' => Carbon::now()->toISOString(),
+            'ip' => request()?->ip(),
+            'user_agent' => request()?->userAgent()
+        ]);
+    }
+
+    /**
+     * Prepare and sanitize task data before creation
+     *
+     * @param array $data
+     * @return array
+     */
+    private function prepareTaskData(array $data): array
+    {
+        // Apply default values
+        if (!isset($data['status'])) {
+            $data['status'] = Task::STATUS_PENDING;
+        }
+
+        if (!isset($data['priority'])) {
+            $data['priority'] = 'medium';
+        }
+
+        // Sanitize text fields
+        if (isset($data['title'])) {
+            $data['title'] = trim($data['title']);
+        }
+
+        if (isset($data['description'])) {
+            $data['description'] = trim($data['description']);
+        }
+
+        // Ensure due_date is properly formatted
+        if (isset($data['due_date']) && $data['due_date']) {
+            try {
+                $data['due_date'] = \Carbon\Carbon::parse($data['due_date'])->toDateTimeString();
+            } catch (\Exception $e) {
+                \Log::warning('Invalid due_date format in task creation', [
+                    'original_due_date' => $data['due_date'],
+                    'error' => $e->getMessage()
+                ]);
+                unset($data['due_date']);
+            }
+        }
+
+        return $data;
+    }
+
+    /**
+     * Hook executed after successful task creation
+     *
+     * @param Task $task
+     * @param array $originalData
+     * @return void
+     */
+    private function afterTaskCreation(Task $task, array $originalData): void
+    {
+        // Log successful creation
+        \Log::info('Task created successfully', [
+            'task_id' => $task->id,
+            'title' => $task->title,
+            'status' => $task->status,
+            'assigned_to' => $task->assigned_to,
+            'due_date' => $task->due_date?->toISOString(),
+            'created_at' => $task->created_at->toISOString(),
+            'original_input' => $originalData
+        ]);
+
+        // Check for special conditions and log them
+        $this->logSpecialCreationConditions($task);
+    }
+
+    /**
+     * Log special conditions during task creation
+     *
+     * @param Task $task
+     * @return void
+     */
+    private function logSpecialCreationConditions(Task $task): void
+    {
+        $conditions = [];
+
+        // Check if task is created as overdue
+        if ($task->due_date && $task->due_date < Carbon::now()) {
+            $conditions[] = 'overdue_on_creation';
+        }
+
+        // Check for high priority tasks
+        if (in_array($task->priority, ['high', 'urgent'])) {
+            $conditions[] = 'high_priority';
+        }
+
+        // Check for immediate assignment
+        if ($task->assigned_to) {
+            $conditions[] = 'assigned_on_creation';
+        }
+
+        // Check for weekend/holiday creation (if applicable)
+        if (Carbon::now()->isWeekend()) {
+            $conditions[] = 'weekend_creation';
+        }
+
+        if (!empty($conditions)) {
+            \Log::info('Special task creation conditions detected', [
+                'task_id' => $task->id,
+                'conditions' => $conditions,
+                'details' => [
+                    'due_date' => $task->due_date?->toISOString(),
+                    'priority' => $task->priority,
+                    'assigned_to' => $task->assigned_to,
+                    'created_on_weekend' => Carbon::now()->isWeekend(),
+                    'created_at' => Carbon::now()->toISOString()
+                ]
+            ]);
+        }
+    }
+
+    /**
+     * Log database errors during task operations
+     *
+     * @param string $operation
+     * @param \Illuminate\Database\QueryException $exception
+     * @param array $context
+     * @return void
+     */
+    private function logDatabaseError(string $operation, \Illuminate\Database\QueryException $exception, array $context = []): void
+    {
+        \Log::error("Database error during task {$operation}", [
+            'operation' => $operation,
+            'error_code' => $exception->getCode(),
+            'error_message' => $exception->getMessage(),
+            'sql_state' => $exception->errorInfo[0] ?? null,
+            'mysql_error_code' => $exception->errorInfo[1] ?? null,
+            'mysql_error_message' => $exception->errorInfo[2] ?? null,
+            'context' => $context,
+            'timestamp' => Carbon::now()->toISOString()
+        ]);
+    }
+
+    /**
+     * Log unexpected errors during task operations
+     *
+     * @param string $operation
+     * @param \Exception $exception
+     * @param array $context
+     * @return void
+     */
+    private function logUnexpectedError(string $operation, \Exception $exception, array $context = []): void
+    {
+        \Log::error("Unexpected error during task {$operation}", [
+            'operation' => $operation,
+            'exception_class' => get_class($exception),
+            'error_message' => $exception->getMessage(),
+            'file' => $exception->getFile(),
+            'line' => $exception->getLine(),
+            'trace' => $exception->getTraceAsString(),
+            'context' => $context,
+            'timestamp' => Carbon::now()->toISOString()
+        ]);
     }
 }

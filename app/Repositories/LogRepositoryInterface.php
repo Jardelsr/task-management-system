@@ -166,4 +166,66 @@ interface LogRepositoryInterface
      * @return int Number of deleted logs
      */
     public function deleteOldLogs(int $retentionDays = 90): int;
+
+    /**
+     * Get total count of logs with filters
+     *
+     * @param array $filters
+     * @return int
+     */
+    public function getTotalCount(array $filters = []): int;
+
+    /**
+     * Get comprehensive log statistics
+     *
+     * @param Carbon|null $startDate
+     * @param Carbon|null $endDate
+     * @return array
+     */
+    public function getStatistics(?Carbon $startDate = null, ?Carbon $endDate = null): array;
+
+    /**
+     * Clean up old logs based on retention policy
+     *
+     * @param int $retentionDays
+     * @return int Number of deleted logs
+     */
+    public function cleanupOldLogs(int $retentionDays = 90): int;
+
+    /**
+     * Export logs to array format
+     *
+     * @param array $filters
+     * @return array
+     */
+    public function exportLogs(array $filters = []): array;
+
+    /**
+     * Find logs by task ID and multiple actions
+     *
+     * @param int $taskId
+     * @param array $actions
+     * @param int $limit
+     * @return Collection
+     */
+    public function findByTaskAndActions(int $taskId, array $actions, int $limit = 50): Collection;
+
+    /**
+     * Find recent logs by multiple actions
+     *
+     * @param array $actions
+     * @param int $limit
+     * @return Collection
+     */
+    public function findRecentByActions(array $actions, int $limit = 100): Collection;
+
+    /**
+     * Find logs by actions between dates
+     *
+     * @param array $actions
+     * @param Carbon $startDate
+     * @param Carbon $endDate
+     * @return Collection
+     */
+    public function findByActionsBetweenDates(array $actions, Carbon $startDate, Carbon $endDate): Collection;
 }

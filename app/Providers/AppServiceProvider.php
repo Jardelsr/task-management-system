@@ -20,6 +20,9 @@ class AppServiceProvider extends ServiceProvider
         // Repository Pattern Bindings
         $this->registerRepositories();
         
+        // Service Pattern Bindings  
+        $this->registerServices();
+        
         // Environment-specific service bindings
         $this->registerEnvironmentServices();
     }
@@ -36,6 +39,17 @@ class AppServiceProvider extends ServiceProvider
         
         // Bind LogRepositoryInterface to LogRepository implementation
         $this->app->bind(LogRepositoryInterface::class, LogRepository::class);
+    }
+
+    /**
+     * Register service interface bindings
+     *
+     * @return void
+     */
+    private function registerServices(): void
+    {
+        // Bind LogServiceInterface to LogService implementation
+        $this->app->bind(\App\Services\LogServiceInterface::class, \App\Services\LogService::class);
     }
 
     /**
