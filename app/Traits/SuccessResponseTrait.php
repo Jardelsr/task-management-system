@@ -503,4 +503,65 @@ trait SuccessResponseTrait
         
         return $this->successResponse($data, $message, 200, $meta);
     }
+
+    /**
+     * Create an enhanced paginated response with comprehensive metadata and statistics
+     *
+     * @param mixed $data
+     * @param array $pagination
+     * @param array|null $statistics
+     * @param array $appliedFilters
+     * @param string|null $message
+     * @param array $additionalMeta
+     * @return JsonResponse
+     */
+    protected function enhancedPaginatedResponse(
+        $data,
+        array $pagination,
+        ?array $statistics = null,
+        array $appliedFilters = [],
+        ?string $message = null,
+        array $additionalMeta = []
+    ): JsonResponse {
+        $request = request();
+        
+        // Build comprehensive pagination metadata
+        $paginationMeta = [
+            'current_page' => $pagination['current_page'] ?? 1,
+            'per_page' => $pagination['per_page'] ?? 50,
+            'total' => $pagination['total'] ?? 0,
+            'total_pages' => $pagination['total_pages'] ?? $pagination['last_page'] ?? 1,
+            'from' => $pagination['from'] ?? 1,
+            'to' => $pagination['to'] ?? 0,
+            'has_next_page' => $pagination['has_next_page'] ?? false,
+            'has_previous_page' => $pagination['has_previous_page'] ?? false,
+            'next_page' => $pagination['next_page'] ?? null,
+            'previous_page' => $pagination['previous_page'] ?? null
+        ];
+        
+        // Build enhanced metadata
+        $meta = $this->buildRequestMetadata($request, [
+            'data_type' => 'enhanced_collection',
+            'data_count' => is_array($data) ? count($data) : 0,
+            'response_format' => 'enhanced'
+        ]);
+
+        // Add filtering information
+        if (!empty($appliedFilters)) {
+            $meta['applied_filters'] = array_filter($appliedFilters, function($value) {
+                return $value !== null && $value !== '';
+            });
+            $meta['filter_count'] = count($meta['applied_filters']);
+        }
+
+        // Add statistics if provided
+        if ($statistics) {
+            $meta['statistics'] = $statistics;
+        }
+
+        // Merge with additional metadata and pagination
+        $finalMeta = array_merge($meta, $additionalMeta, ['pagination' => $paginationMeta]);
+
+        return $this->successResponse($data, $message, 200, $finalMeta);
+    }
 }

@@ -19,8 +19,9 @@ interface LogRepositoryInterface
     /**
      * Find a log by ID
      *
-     * @param string $id
+     * @param string $id MongoDB ObjectId as string
      * @return TaskLog|null
+     * @throws \InvalidArgumentException If the ID format is invalid
      */
     public function findById(string $id): ?TaskLog;
 
@@ -228,4 +229,47 @@ interface LogRepositoryInterface
      * @return Collection
      */
     public function findByActionsBetweenDates(array $actions, Carbon $startDate, Carbon $endDate): Collection;
+
+    /**
+     * Find logs with advanced filters and sorting
+     *
+     * @param array $criteria
+     * @param Carbon|null $startDate
+     * @param Carbon|null $endDate
+     * @param string $sortBy
+     * @param string $sortOrder
+     * @param int $limit
+     * @param int $offset
+     * @return Collection<int, TaskLog>
+     */
+    public function findWithAdvancedFilters(
+        array $criteria,
+        ?Carbon $startDate = null,
+        ?Carbon $endDate = null,
+        string $sortBy = 'created_at',
+        string $sortOrder = 'desc',
+        int $limit = 100,
+        int $offset = 0
+    ): Collection;
+
+    /**
+     * Get count of logs with specific filters
+     *
+     * @param array $criteria
+     * @param Carbon|null $startDate
+     * @param Carbon|null $endDate
+     * @return int
+     */
+    public function getCountWithFilters(
+        array $criteria,
+        ?Carbon $startDate = null,
+        ?Carbon $endDate = null
+    ): int;
+
+    /**
+     * Get estimated total count of logs
+     *
+     * @return int
+     */
+    public function getEstimatedTotalCount(): int;
 }

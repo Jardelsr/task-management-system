@@ -105,22 +105,25 @@ class ApiDocumentationController extends Controller
                     'endpoints' => [
                         'collection' => [
                             'GET /api/v1/logs' => [
-                                'description' => 'List recent logs with filtering',
-                                'parameters' => ['action', 'task_id', 'user_id', 'date_from', 'date_to']
+                                'description' => 'List recent logs with filtering or retrieve specific log by ID',
+                                'parameters' => ['action', 'task_id', 'user_id', 'date_from', 'date_to', 'id'],
+                                'note' => 'Use ?id=<log_id> to retrieve specific log, or omit for filtered list'
                             ],
                             'GET /api/v1/logs/stats' => [
                                 'description' => 'Log statistics and activity metrics',
                                 'returns' => 'action counts, user activity, timeline data'
                             ],
                             'GET /api/v1/logs/recent' => [
-                                'description' => 'Most recent system activity',
-                                'default_limit' => 50
+                                'description' => 'Most recent system activity (last 30 logs by default)',
+                                'default_limit' => 30
                             ]
                         ],
                         'resource' => [
                             'GET /api/v1/logs/{id}' => [
-                                'description' => 'Show specific log entry details',
-                                'includes' => 'full context and metadata'
+                                'description' => 'Show specific log entry by MongoDB ObjectId',
+                                'includes' => 'full context and metadata',
+                                'id_format' => '24-character hexadecimal string (MongoDB ObjectId)',
+                                'validation' => 'Validates ObjectId format and returns detailed error for invalid IDs'
                             ],
                             'GET /api/v1/logs/tasks/{task_id}' => [
                                 'description' => 'Complete audit trail for a specific task',

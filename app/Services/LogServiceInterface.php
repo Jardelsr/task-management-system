@@ -101,8 +101,9 @@ interface LogServiceInterface
     /**
      * Find a specific log by ID
      *
-     * @param string $id
+     * @param string $id MongoDB ObjectId as string
      * @return TaskLog|null
+     * @throws LoggingException If validation fails or retrieval error occurs
      */
     public function findLogById(string $id): ?TaskLog;
 

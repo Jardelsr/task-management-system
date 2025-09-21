@@ -54,10 +54,9 @@ $app->configure('api');
 |--------------------------------------------------------------------------
 */
 
-// Register MongoDB service provider FIRST, before database service provider
+// Register services in the correct order for Lumen 11
 $app->register(MongoDB\Laravel\MongoDBServiceProvider::class);
-$app->register(App\Providers\MongoDBServiceProvider::class);
-$app->register(Illuminate\Database\DatabaseServiceProvider::class);
+$app->register(App\Providers\MongoDBConnectionServiceProvider::class);
 $app->register(App\Providers\AppServiceProvider::class);
 
 /*

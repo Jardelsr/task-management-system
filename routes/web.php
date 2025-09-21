@@ -238,40 +238,39 @@ $router->group([
     ], function () use ($router) {
         
         /*
-        | Log Collection Routes
-        | Aggregate and statistical log operations
+        | Static Log Routes (Must come BEFORE variable routes)
+        | Statistical, aggregate, and filtered log operations
         */
-        $router->group(['prefix' => ''], function () use ($router) {
-            
-            // Statistical and aggregate routes
-            $router->get('/stats', 'LogController@stats');
-            $router->get('/summary', 'LogController@summary');
-            $router->get('/export', 'LogController@export');
-            
-            // Filtered log collections
-            $router->get('/actions/{action}', 'LogController@byAction');
-            $router->get('/users/{userId:[0-9]+}', 'LogController@byUser');
-            $router->get('/recent', 'LogController@recent');
-            
-            // System logs
-            $router->get('/errors', 'LogController@errors');
-            $router->get('/warnings', 'LogController@warnings');
-        });
+        
+        // Statistical and aggregate routes
+        $router->get('/stats', 'LogController@stats');
+        $router->get('/export', 'LogController@export');
+        $router->get('/recent', 'LogController@recent');
+        $router->get('/date-range', 'LogController@dateRange');
+        
+        // Deletion-specific logs
+        $router->get('/deletions/recent', 'LogController@recentDeletions');
+        $router->get('/deletions/stats', 'LogController@deletionStats');
+        
+        // Filtered log collections
+        $router->get('/actions/{action}', 'LogController@byAction');
+        $router->get('/users/{userId:[0-9]+}', 'LogController@byUser');
+        
+        // Task-specific logs
+        $router->get('/tasks/{taskId:[0-9]+}', 'LogController@taskLogs');
+        $router->get('/tasks/{taskId:[0-9]+}/deletions', 'LogController@taskDeletionLogs');
+        
+        // Log maintenance operations
+        $router->delete('/cleanup', 'LogController@cleanup');
         
         /*
-        | Log Resource Routes
-        | Individual log operations and task-specific logs
+        | Variable Log Routes (Must come AFTER static routes)
+        | Individual log operations with variable parameters
         */
-        $router->group(['prefix' => ''], function () use ($router) {
-            
-            // Standard CRUD operations
-            $router->get('/', 'LogController@index');                     // List logs
-            $router->get('/{id}', 'LogController@show');                  // Show specific log
-            
-            // Task-specific log operations
-            $router->get('/tasks/{taskId:[0-9]+}', 'LogController@taskLogs');
-            $router->get('/tasks/{taskId:[0-9]+}/timeline', 'LogController@taskTimeline');
-        });
+        
+        // Standard CRUD operations
+        $router->get('/', 'LogController@index');                     // List logs with filtering
+        $router->get('/{id}', 'LogController@show');                  // Show specific log
     });
 
     /*
@@ -381,13 +380,25 @@ $router->group([
 
     /*
     | Legacy Log Routes  
-    | Simple log access without versioning
+    | Simple log access without versioning - Static routes BEFORE variable routes
     */
     $router->group(['prefix' => 'logs'], function () use ($router) {
         
-        $router->get('/', 'LogController@index');
+        // Static routes first
         $router->get('/stats', 'LogController@stats');
-        $router->get('/tasks/{id:[0-9]+}', 'LogController@taskLogs');
+        $router->get('/recent', 'LogController@recent');
+        $router->get('/export', 'LogController@export');
+        
+        // Task-specific logs (with regex constraints)
+        $router->get('/tasks/{taskId:[0-9]+}', 'LogController@taskLogs');
+        
+        // Filtered logs (with parameters)
+        $router->get('/actions/{action}', 'LogController@byAction');
+        $router->get('/users/{userId:[0-9]+}', 'LogController@byUser');
+        
+        // Variable routes last
+        $router->get('/', 'LogController@index');
+        $router->get('/{id}', 'LogController@show');
     });
 });
 

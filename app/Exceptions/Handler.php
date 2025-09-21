@@ -104,7 +104,31 @@ class Handler extends ExceptionHandler
         }
 
         if ($exception instanceof LoggingException) {
-            // For logging exceptions, return a generic error to avoid exposing internal details
+            // For validation-type logging exceptions, return proper error details
+            if ($exception->getLogOperation() === 'validation') {
+                return response()->json([
+                    'success' => false,
+                    'timestamp' => \Carbon\Carbon::now()->toISOString(),
+                    'error' => 'Validation Error',
+                    'message' => $exception->getMessage(),
+                    'context' => $exception->getContext(),
+                    'error_code' => 'VALIDATION_ERROR'
+                ], 422);
+            }
+            
+            // For find_by_id operations, return 404
+            if ($exception->getLogOperation() === 'find_by_id') {
+                return response()->json([
+                    'success' => false,
+                    'timestamp' => \Carbon\Carbon::now()->toISOString(),
+                    'error' => 'Not Found',
+                    'message' => $exception->getMessage(),
+                    'context' => $exception->getContext(),
+                    'error_code' => 'RESOURCE_NOT_FOUND'
+                ], 404);
+            }
+            
+            // For other logging exceptions, return a generic error to avoid exposing internal details
             return $this->serverErrorResponse(
                 'An error occurred while processing your request'
             );

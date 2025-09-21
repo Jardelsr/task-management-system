@@ -3,8 +3,7 @@
 namespace App\Providers;
 
 use Illuminate\Support\ServiceProvider;
-use Illuminate\Database\DatabaseManager;
-use MongoDB\Laravel\Connection;
+use MongoDB\Laravel\MongoDBServiceProvider as LaravelMongoDBServiceProvider;
 
 class MongoDBServiceProvider extends ServiceProvider
 {
@@ -21,11 +20,7 @@ class MongoDBServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        // Register MongoDB connection resolver in the database manager
-        $db = $this->app->make('db');
-        $db->extend('mongodb', function ($config, $name) {
-            $config['name'] = $name;
-            return new \MongoDB\Laravel\Connection($config);
-        });
+        // The MongoDB service provider should handle the connection registration
+        // No custom logic needed here as it's handled by the official package
     }
 }

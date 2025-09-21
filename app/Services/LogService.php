@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Services\LogServiceInterface;
+use App\Services\LogResponseFormatter;
 use App\Repositories\LogRepositoryInterface;
 use App\Models\TaskLog;
 use App\Exceptions\LoggingException;
@@ -23,13 +24,22 @@ class LogService implements LogServiceInterface
     protected LogRepositoryInterface $logRepository;
 
     /**
+     * Response formatter instance
+     *
+     * @var LogResponseFormatter
+     */
+    protected LogResponseFormatter $responseFormatter;
+
+    /**
      * LogService constructor with dependency injection
      *
      * @param LogRepositoryInterface $logRepository
+     * @param LogResponseFormatter $responseFormatter
      */
-    public function __construct(LogRepositoryInterface $logRepository)
+    public function __construct(LogRepositoryInterface $logRepository, LogResponseFormatter $responseFormatter)
     {
         $this->logRepository = $logRepository;
+        $this->responseFormatter = $responseFormatter;
     }
 
     /**
@@ -153,6 +163,69 @@ class LogService implements LogServiceInterface
                 'Failed to retrieve logs with filters: ' . $e->getMessage(),
                 'retrieve',
                 ['filters' => $request->all()]
+            );
+        }
+    }
+
+    /**
+     * Get logs with advanced filtering capabilities
+     *
+     * @param array $validatedParams
+     * @param Request $request
+     * @return array
+     * @throws LoggingException
+     */
+    public function getLogsWithAdvancedFilters(array $validatedParams, Request $request): array
+    {
+        try {
+            // Handle pagination
+            $limit = $validatedParams['limit'] ?? config('api.responses.default_per_page', 50);
+            $page = $request->query('page', 1);
+            $offset = ($page - 1) * $limit;
+
+            // Apply advanced filters and get results
+            $logs = $this->applyAdvancedFiltersAndPagination($validatedParams, $limit, $offset);
+
+            // Get total count for pagination with same filters
+            $total = $this->getTotalLogsCountWithFilters($validatedParams);
+
+            // Calculate pagination metadata
+            $lastPage = $total > 0 ? ceil($total / $limit) : 1;
+            $from = $total > 0 ? $offset + 1 : 0;
+            $to = min($offset + $limit, $total);
+
+            // Generate query statistics
+            $statistics = $this->generateQueryStatistics($validatedParams, $total, $logs);
+
+            return [
+                'logs' => $logs,
+                'pagination' => [
+                    'current_page' => (int) $page,
+                    'per_page' => (int) $limit,
+                    'total' => (int) $total,
+                    'last_page' => (int) $lastPage,
+                    'from' => (int) $from,
+                    'to' => (int) $to,
+                    'has_next_page' => $page < $lastPage,
+                    'has_previous_page' => $page > 1
+                ],
+                'filters' => array_filter($validatedParams, function($value) {
+                    return $value !== null && $value !== '';
+                }),
+                'statistics' => $statistics
+            ];
+
+        } catch (\Exception $e) {
+            Log::error('Failed to retrieve logs with advanced filters', [
+                'filters' => $validatedParams,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            throw new LoggingException(
+                'Failed to retrieve logs with advanced filters: ' . $e->getMessage(),
+                'advanced_retrieve',
+                ['filters' => $validatedParams]
             );
         }
     }
@@ -291,7 +364,7 @@ class LogService implements LogServiceInterface
     /**
      * Find a specific log by ID
      *
-     * @param string $id
+     * @param string $id MongoDB ObjectId as string
      * @return TaskLog|null
      * @throws LoggingException
      */
@@ -299,10 +372,21 @@ class LogService implements LogServiceInterface
     {
         try {
             return $this->logRepository->findById($id);
+        } catch (LoggingException $e) {
+            // Re-throw LoggingException as is
+            throw $e;
+        } catch (\InvalidArgumentException $e) {
+            // Re-throw validation errors as LoggingException
+            throw new LoggingException(
+                'Invalid log ID format: ' . $e->getMessage(),
+                'validation',
+                ['log_id' => $id]
+            );
         } catch (\Exception $e) {
             Log::error('Failed to find log by ID', [
                 'log_id' => $id,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
             ]);
 
             throw new LoggingException(
@@ -485,41 +569,176 @@ class LogService implements LogServiceInterface
     }
 
     /**
-     * Apply filters and pagination to log queries
+     * Apply advanced filters and pagination to log queries
      *
      * @param array $filters
      * @param int $limit
      * @param int $offset
      * @return Collection
      */
-    private function applyFiltersAndPagination(array $filters, int $limit, int $offset): Collection
+    private function applyAdvancedFiltersAndPagination(array $filters, int $limit, int $offset): Collection
     {
-        // Start with base query
-        $query = null;
-        
-        // Apply specific filters based on parameters
-        if (isset($filters['task_id'])) {
-            return $this->logRepository->findByTask($filters['task_id'], $limit);
-        }
-        
-        if (isset($filters['action'])) {
-            return $this->logRepository->findByAction($filters['action'], $limit);
-        }
-        
-        if (isset($filters['user_id'])) {
-            return $this->logRepository->findByUser($filters['user_id'], $limit);
-        }
-        
-        if (isset($filters['date_from']) && isset($filters['date_to'])) {
-            return $this->logRepository->findByDateRange(
-                Carbon::parse($filters['date_from']),
-                Carbon::parse($filters['date_to']),
-                $limit
+        try {
+            // Build filter criteria
+            $criteria = [];
+            $sortBy = $filters['sort_by'] ?? 'created_at';
+            $sortOrder = $filters['sort_order'] ?? 'desc';
+
+            // Task ID filter
+            if (isset($filters['task_id'])) {
+                $criteria['task_id'] = $filters['task_id'];
+            }
+
+            // Action filter
+            if (isset($filters['action'])) {
+                $criteria['action'] = $filters['action'];
+            }
+
+            // User ID filter
+            if (isset($filters['user_id'])) {
+                $criteria['user_id'] = $filters['user_id'];
+            }
+
+            // Level filter
+            if (isset($filters['level'])) {
+                $criteria['level'] = $filters['level'];
+            }
+
+            // Source filter
+            if (isset($filters['source'])) {
+                $criteria['source'] = $filters['source'];
+            }
+
+            // Date range filter
+            $startDate = null;
+            $endDate = null;
+            if (isset($filters['start_date'])) {
+                $startDate = Carbon::parse($filters['start_date']);
+            }
+            if (isset($filters['end_date'])) {
+                $endDate = Carbon::parse($filters['end_date']);
+            }
+
+            // Use repository method with comprehensive filters
+            return $this->logRepository->findWithAdvancedFilters(
+                $criteria,
+                $startDate,
+                $endDate,
+                $sortBy,
+                $sortOrder,
+                $limit,
+                $offset
             );
+
+        } catch (\Exception $e) {
+            Log::error('Error applying advanced filters', [
+                'filters' => $filters,
+                'error' => $e->getMessage()
+            ]);
+            
+            // Fallback to basic recent logs
+            return $this->logRepository->findRecent($limit);
         }
-        
-        // Default to recent logs
-        return $this->logRepository->findRecent($limit);
+    }
+
+    /**
+     * Get total count of logs with applied filters
+     *
+     * @param array $filters
+     * @return int
+     */
+    private function getTotalLogsCountWithFilters(array $filters): int
+    {
+        try {
+            // Build the same criteria as in applyAdvancedFiltersAndPagination
+            $criteria = [];
+
+            if (isset($filters['task_id'])) {
+                $criteria['task_id'] = $filters['task_id'];
+            }
+            if (isset($filters['action'])) {
+                $criteria['action'] = $filters['action'];
+            }
+            if (isset($filters['user_id'])) {
+                $criteria['user_id'] = $filters['user_id'];
+            }
+            if (isset($filters['level'])) {
+                $criteria['level'] = $filters['level'];
+            }
+            if (isset($filters['source'])) {
+                $criteria['source'] = $filters['source'];
+            }
+
+            // Date range
+            $startDate = isset($filters['start_date']) ? Carbon::parse($filters['start_date']) : null;
+            $endDate = isset($filters['end_date']) ? Carbon::parse($filters['end_date']) : null;
+
+            return $this->logRepository->getCountWithFilters($criteria, $startDate, $endDate);
+
+        } catch (\Exception $e) {
+            Log::warning('Could not get accurate count with filters, using fallback', [
+                'filters' => $filters,
+                'error' => $e->getMessage()
+            ]);
+            
+            // Fallback to estimated count
+            return $this->logRepository->getEstimatedTotalCount();
+        }
+    }
+
+    /**
+     * Generate query statistics for the response
+     *
+     * @param array $filters
+     * @param int $total
+     * @param Collection $logs
+     * @return array
+     */
+    private function generateQueryStatistics(array $filters, int $total, Collection $logs): array
+    {
+        $appliedFiltersCount = count(array_filter($filters, function($value) {
+            return $value !== null && $value !== '';
+        }));
+
+        $stats = [
+            'total_logs' => $total,
+            'logs_returned' => $logs->count(),
+            'applied_filters_count' => $appliedFiltersCount,
+            'query_execution_time' => round($this->getExecutionTime(), 4),
+            'has_filters' => $appliedFiltersCount > 0
+        ];
+
+        // Add date range statistics if applicable
+        if (isset($filters['start_date']) && isset($filters['end_date'])) {
+            $stats['date_range'] = [
+                'start' => $filters['start_date'],
+                'end' => $filters['end_date'],
+                'days_covered' => Carbon::parse($filters['end_date'])->diffInDays(Carbon::parse($filters['start_date'])) + 1
+            ];
+        }
+
+        // Add filter-specific statistics
+        if (isset($filters['action'])) {
+            $stats['filtered_by_action'] = $filters['action'];
+        }
+        if (isset($filters['task_id'])) {
+            $stats['filtered_by_task'] = $filters['task_id'];
+        }
+        if (isset($filters['level'])) {
+            $stats['filtered_by_level'] = $filters['level'];
+        }
+
+        return $stats;
+    }
+
+    /**
+     * Get execution time since request start (fallback method)
+     *
+     * @return float
+     */
+    private function getExecutionTime(): float
+    {
+        return defined('LARAVEL_START') ? (microtime(true) - LARAVEL_START) * 1000 : 0;
     }
 
     /**
@@ -1092,5 +1311,153 @@ class LogService implements LogServiceInterface
         $taskLog->setAttribute('fallback_used', true);
         
         return $taskLog;
+    }
+
+    // ===== ENHANCED RESPONSE FORMATTING METHODS =====
+
+    /**
+     * Get logs with enhanced formatting and comprehensive metadata
+     *
+     * @param array $validatedParams
+     * @param Request $request
+     * @param array $responseOptions
+     * @return array
+     * @throws LoggingException
+     */
+    public function getFormattedLogsWithAdvancedFilters(
+        array $validatedParams, 
+        Request $request,
+        array $responseOptions = []
+    ): array {
+        try {
+            // Extract filtering parameters
+            $limit = $validatedParams['limit'] ?? config('api.responses.default_per_page', 50);
+            $page = $request->query('page', 1);
+            $offset = ($page - 1) * $limit;
+
+            // Extract date filters
+            $startDate = null;
+            $endDate = null;
+            if (!empty($validatedParams['start_date'])) {
+                $startDate = Carbon::parse($validatedParams['start_date']);
+            }
+            if (!empty($validatedParams['end_date'])) {
+                $endDate = Carbon::parse($validatedParams['end_date']);
+            }
+
+            // Use repository's new formatted response method
+            $result = $this->logRepository->findWithFormattedResponse(
+                $validatedParams,
+                $startDate,
+                $endDate,
+                $validatedParams['sort_by'] ?? 'created_at',
+                $validatedParams['sort_order'] ?? 'desc',
+                $limit,
+                $offset,
+                $responseOptions
+            );
+
+            return $result;
+
+        } catch (\Exception $e) {
+            Log::error('Failed to retrieve formatted logs with advanced filters', [
+                'filters' => $validatedParams,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            throw new LoggingException(
+                'Failed to retrieve formatted logs: ' . $e->getMessage(),
+                'formatted_retrieve',
+                ['filters' => $validatedParams]
+            );
+        }
+    }
+
+    /**
+     * Find a log by ID with enhanced formatting
+     *
+     * @param string $id
+     * @param array $responseOptions
+     * @return array|null
+     * @throws LoggingException
+     */
+    public function findFormattedLogById(string $id, array $responseOptions = []): ?array
+    {
+        try {
+            return $this->logRepository->findByIdWithFormattedResponse($id, $responseOptions);
+        } catch (LoggingException $e) {
+            throw $e;
+        } catch (\Exception $e) {
+            Log::error('Failed to find formatted log by ID', [
+                'log_id' => $id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            throw new LoggingException(
+                'Failed to find formatted log by ID: ' . $e->getMessage(),
+                'formatted_retrieve',
+                ['log_id' => $id]
+            );
+        }
+    }
+
+    /**
+     * Get task logs with enhanced formatting
+     *
+     * @param int $taskId
+     * @param int $limit
+     * @param array $responseOptions
+     * @return array
+     * @throws LoggingException
+     */
+    public function getFormattedTaskLogs(int $taskId, int $limit = 50, array $responseOptions = []): array
+    {
+        try {
+            return $this->logRepository->findByTaskWithFormattedResponse($taskId, $limit, $responseOptions);
+        } catch (\Exception $e) {
+            Log::error('Failed to retrieve formatted task logs', [
+                'task_id' => $taskId,
+                'error' => $e->getMessage()
+            ]);
+
+            throw new LoggingException(
+                'Failed to retrieve formatted task logs: ' . $e->getMessage(),
+                'formatted_retrieve',
+                ['task_id' => $taskId]
+            );
+        }
+    }
+
+    /**
+     * Get log statistics with enhanced formatting
+     *
+     * @param Carbon|null $startDate
+     * @param Carbon|null $endDate
+     * @param array $responseOptions
+     * @return array
+     * @throws LoggingException
+     */
+    public function getFormattedLogStatistics(
+        ?Carbon $startDate = null, 
+        ?Carbon $endDate = null,
+        array $responseOptions = []
+    ): array {
+        try {
+            return $this->logRepository->getStatisticsWithFormattedResponse($startDate, $endDate, $responseOptions);
+        } catch (\Exception $e) {
+            Log::error('Failed to retrieve formatted log statistics', [
+                'start_date' => $startDate?->toISOString(),
+                'end_date' => $endDate?->toISOString(),
+                'error' => $e->getMessage()
+            ]);
+
+            throw new LoggingException(
+                'Failed to retrieve formatted log statistics: ' . $e->getMessage(),
+                'formatted_statistics',
+                ['start_date' => $startDate, 'end_date' => $endDate]
+            );
+        }
     }
 }

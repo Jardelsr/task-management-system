@@ -5,9 +5,11 @@ namespace App\Http\Controllers;
 use App\Services\LogServiceInterface;
 use App\Exceptions\LoggingException;
 use App\Exceptions\DatabaseException;
+use App\Exceptions\TaskValidationException;
 use App\Http\Requests\ValidationHelper;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Carbon\Carbon;
 
 class LogController extends Controller
 {
@@ -29,7 +31,7 @@ class LogController extends Controller
     }
 
     /**
-     * Display a listing of recent logs
+     * Display a listing of logs with comprehensive filtering
      *
      * @param Request $request
      * @return JsonResponse
@@ -37,48 +39,127 @@ class LogController extends Controller
     public function index(Request $request): JsonResponse
     {
         try {
-            // If requesting specific log by ID
+            // If requesting specific log by ID via query parameter
             if ($request->has('id')) {
-                $log = $this->logService->findLogById($request->get('id'));
+                $id = trim($request->get('id'));
                 
-                if (!$log) {
-                    throw new LoggingException('Log not found', 'find_by_id', ['id' => $request->get('id')]);
+                if (empty($id)) {
+                    throw new LoggingException(
+                        'Log ID parameter cannot be empty',
+                        'validation',
+                        ['provided_id' => $request->get('id')]
+                    );
+                }
+
+                $result = $this->logService->findFormattedLogById($id, [
+                    'include_metadata' => true,
+                    'include_technical' => $request->query('include_technical', false)
+                ]);
+                
+                if (!$result) {
+                    throw new LoggingException(
+                        'Log not found', 
+                        'find_by_id', 
+                        ['id' => $id]
+                    );
                 }
                 
-                return $this->enhancedSuccessResponse(
-                    $log,
+                return $this->successResponse(
+                    $result['log'],
                     'Log retrieved successfully',
                     200,
-                    ['log_id' => $request->get('id')],
-                    $request
+                    $result['meta']
+                )->withHeaders([
+                    'X-Log-ID' => $id,
+                    'X-API-Version' => config('api.version', '1.0'),
+                    'X-Retrieved-At' => \Carbon\Carbon::now()->toISOString()
+                ]);
+            }
+
+            // Sanitize and validate request parameters using comprehensive filtering rules
+            $sanitizedData = ValidationHelper::sanitizeInput($request->all());
+            $request->replace($sanitizedData);
+
+            // Use LogValidationRequest for comprehensive filtering validation
+            $validator = app('validator')->make(
+                $request->all(),
+                \App\Http\Requests\LogValidationRequest::getFilterValidationRules(),
+                \App\Http\Requests\LogValidationRequest::getFilterValidationMessages()
+            );
+
+            if ($validator->fails()) {
+                throw new TaskValidationException(
+                    $validator->errors()->toArray(),
+                    null,
+                    'Log filtering parameters validation failed'
                 );
             }
+
+            $validatedParams = $validator->validated();
             
-            // Get logs with filters and pagination using the service
-            $result = $this->logService->getLogsWithFilters($request);
+            // Response formatting options
+            $responseOptions = [
+                'include_metadata' => $request->query('include_metadata', true),
+                'include_technical' => $request->query('include_technical', false),
+                'date_format' => $request->query('date_format', 'iso8601'),
+                'include_changes' => $request->query('include_changes', true)
+            ];
             
-            return $this->paginatedResponse(
-                $result['logs']->toArray(),
+            // Get logs with enhanced formatting
+            $result = $this->logService->getFormattedLogsWithAdvancedFilters($validatedParams, $request, $responseOptions);
+            
+            // Build enhanced response using the new formatted data
+            $response = $this->enhancedPaginatedResponse(
+                $result['logs'],
                 $result['pagination'],
-                'Logs retrieved successfully'
-            )->withHeaders([
+                $result['statistics'],
+                $result['applied_filters'],
+                count($result['logs']) === 0 ? 'No logs found matching the specified criteria' : 'Logs retrieved successfully'
+            );
+
+            // Add comprehensive headers
+            $headers = [
                 'X-Total-Count' => $result['pagination']['total'],
                 'X-Page' => $result['pagination']['current_page'],
                 'X-Per-Page' => $result['pagination']['per_page'],
-                'X-API-Version' => config('api.version', '1.0')
-            ]);
+                'X-Total-Pages' => $result['pagination']['last_page'],
+                'X-Applied-Filters' => json_encode(array_keys($result['applied_filters'])),
+                'X-API-Version' => config('api.version', '1.0'),
+                'X-Query-Execution-Time' => round($result['query_metadata']['execution_time'] ?? 0, 4) . 'ms'
+            ];
+
+            // Add sorting information to headers
+            if (isset($result['query_metadata']['sort_by'])) {
+                $headers['X-Sort-By'] = $result['query_metadata']['sort_by'];
+                $headers['X-Sort-Order'] = $result['query_metadata']['sort_order'];
+            }
+
+            // Add date range to headers if applicable
+            if (!empty($result['query_metadata']['date_range']['start']) && !empty($result['query_metadata']['date_range']['end'])) {
+                $headers['X-Date-Range'] = $result['query_metadata']['date_range']['start'] . ' to ' . $result['query_metadata']['date_range']['end'];
+            }
+
+            return $response->withHeaders($headers);
             
+        } catch (TaskValidationException $e) {
+            return $this->validationErrorResponse(
+                $e->getErrors(),
+                'Log filtering validation failed',
+                ['applied_filters' => $request->all()]
+            );
         } catch (LoggingException $e) {
             throw $e;
         } catch (\Exception $e) {
             \Log::error('Unexpected error in LogController@index', [
                 'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
                 'params' => $request->all()
             ]);
 
             throw new LoggingException(
                 'Failed to retrieve logs: ' . $e->getMessage(),
-                'index'
+                'index',
+                ['request_params' => $request->all()]
             );
         }
     }
@@ -98,25 +179,26 @@ class LogController extends Controller
             
             $limit = min(max((int) $request->query('limit', 50), 1), 1000);
 
-            // Get logs for specific task
-            $logs = $this->logService->getTaskLogs($validatedId, $limit);
-            
-            $pagination = [
-                'current_page' => 1,
-                'per_page' => $limit,
-                'total' => $logs->count(),
-                'total_pages' => 1,
-                'has_next_page' => false,
-                'has_previous_page' => false,
+            // Response formatting options
+            $responseOptions = [
+                'include_metadata' => $request->query('include_metadata', true),
+                'include_technical' => $request->query('include_technical', false),
+                'date_format' => $request->query('date_format', 'iso8601'),
+                'include_changes' => $request->query('include_changes', true)
             ];
 
-            return $this->paginatedResponse(
-                $logs->toArray(),
-                $pagination,
-                "Logs for task {$validatedId} retrieved successfully"
+            // Get formatted logs for specific task
+            $result = $this->logService->getFormattedTaskLogs($validatedId, $limit, $responseOptions);
+            
+            return $this->enhancedSuccessResponse(
+                $result['logs'],
+                "Logs for task {$validatedId} retrieved successfully",
+                200,
+                array_merge($result['meta'], $result['task_metadata'] ?? [])
             )->withHeaders([
                 'X-Task-ID' => $validatedId,
-                'X-Total-Count' => $logs->count(),
+                'X-Total-Count' => $result['task_metadata']['total_logs_for_task'] ?? 0,
+                'X-Returned-Count' => $result['task_metadata']['returned_count'] ?? 0,
                 'X-API-Version' => config('api.version', '1.0')
             ]);
 
@@ -139,23 +221,580 @@ class LogController extends Controller
     /**
      * Get log statistics
      *
+     * @param Request $request
      * @return JsonResponse
      */
-    public function stats(): JsonResponse
+    public function stats(Request $request): JsonResponse
     {
         try {
-            $stats = $this->logService->getLogStatistics();
+            $startDate = null;
+            $endDate = null;
+            
+            // Parse date range if provided
+            if ($request->has('start_date')) {
+                try {
+                    $startDate = Carbon::parse($request->get('start_date'));
+                } catch (\Exception $e) {
+                    throw new TaskValidationException(['start_date' => ['Invalid date format']], 'start_date');
+                }
+            }
+            
+            if ($request->has('end_date')) {
+                try {
+                    $endDate = Carbon::parse($request->get('end_date'));
+                } catch (\Exception $e) {
+                    throw new TaskValidationException(['end_date' => ['Invalid date format']], 'end_date');
+                }
+            }
 
-            return $this->statsResponse($stats, 'Log statistics retrieved successfully');
+            // Response formatting options
+            $responseOptions = [
+                'include_performance_metrics' => $request->query('include_performance', false),
+                'detailed_breakdown' => $request->query('detailed', true)
+            ];
+            
+            $stats = $this->logService->getFormattedLogStatistics($startDate, $endDate, $responseOptions);
 
+            return $this->statsResponse(
+                $stats,
+                'Log statistics retrieved successfully'
+            )->withHeaders([
+                'X-Statistics-Period' => $stats['summary']['period_analyzed']['start'] . ' to ' . $stats['summary']['period_analyzed']['end'],
+                'X-Total-Logs' => $stats['summary']['total_logs'],
+                'X-API-Version' => config('api.version', '1.0'),
+                'X-Generated-At' => $stats['generated_at']
+            ]);
+
+        } catch (TaskValidationException $e) {
+            throw $e;
         } catch (\Exception $e) {
             \Log::error('Unexpected error in LogController@stats', [
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
+                'request_params' => $request->all()
             ]);
 
             throw new LoggingException(
                 'Failed to retrieve log statistics: ' . $e->getMessage(),
                 'stats'
+            );
+        }
+    }
+
+    /**
+     * Get specific log by ID
+     *
+     * @param string $id The MongoDB ObjectId of the log
+     * @return JsonResponse
+     */
+    public function show(string $id): JsonResponse
+    {
+        try {
+            // Validate input ID format
+            $id = trim($id);
+            if (empty($id)) {
+                throw new LoggingException(
+                    'Log ID is required',
+                    'validation',
+                    ['provided_id' => $id]
+                );
+            }
+
+            $responseOptions = [
+                'include_metadata' => true,
+                'include_technical' => request()->query('include_technical', false),
+                'include_changes' => true
+            ];
+
+            $result = $this->logService->findFormattedLogById($id, $responseOptions);
+            
+            if (!$result) {
+                throw new LoggingException(
+                    'Log not found',
+                    'find_by_id',
+                    ['log_id' => $id]
+                );
+            }
+
+            return $this->successResponse(
+                $result['log'],
+                'Log retrieved successfully',
+                200,
+                $result['meta']
+            )->withHeaders([
+                'X-Log-ID' => $id,
+                'X-API-Version' => config('api.version', '1.0'),
+                'X-Retrieved-At' => $result['meta']['retrieved_at']
+            ]);
+
+        } catch (\InvalidArgumentException $e) {
+            throw new LoggingException(
+                'Invalid log ID format: ' . $e->getMessage(),
+                'validation',
+                ['log_id' => $id, 'expected_format' => '24-character hexadecimal string']
+            );
+        } catch (LoggingException $e) {
+            throw $e;
+        } catch (\Exception $e) {
+            \Log::error('Unexpected error in LogController@show', [
+                'error' => $e->getMessage(),
+                'log_id' => $id,
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            throw new LoggingException(
+                'Failed to retrieve log: ' . $e->getMessage(),
+                'show',
+                ['log_id' => $id]
+            );
+        }
+    }
+
+    /**
+     * Get logs by action type
+     *
+     * @param Request $request
+     * @param string $action
+     * @return JsonResponse
+     */
+    public function byAction(Request $request, string $action): JsonResponse
+    {
+        try {
+            $limit = min(max((int) $request->query('limit', 50), 1), 1000);
+            
+            $logs = $this->logService->getLogsByAction($action, $limit);
+            
+            $pagination = [
+                'current_page' => 1,
+                'per_page' => $limit,
+                'total' => $logs->count(),
+                'total_pages' => 1,
+                'has_next_page' => false,
+                'has_previous_page' => false,
+            ];
+
+            return $this->paginatedResponse(
+                $logs->toArray(),
+                $pagination,
+                "Logs for action '{$action}' retrieved successfully"
+            )->withHeaders([
+                'X-Action-Type' => $action,
+                'X-Total-Count' => $logs->count(),
+                'X-API-Version' => config('api.version', '1.0')
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error('Unexpected error in LogController@byAction', [
+                'action' => $action,
+                'error' => $e->getMessage()
+            ]);
+
+            throw new LoggingException(
+                'Failed to retrieve logs by action: ' . $e->getMessage(),
+                'by_action',
+                ['action' => $action]
+            );
+        }
+    }
+
+    /**
+     * Get logs by user
+     *
+     * @param Request $request
+     * @param int $userId
+     * @return JsonResponse
+     */
+    public function byUser(Request $request, int $userId): JsonResponse
+    {
+        try {
+            $validatedUserId = ValidationHelper::validateTaskId($userId); // Reusing validation logic
+            $limit = min(max((int) $request->query('limit', 50), 1), 1000);
+            
+            $logs = $this->logService->getLogsByUser($validatedUserId, $limit);
+            
+            $pagination = [
+                'current_page' => 1,
+                'per_page' => $limit,
+                'total' => $logs->count(),
+                'total_pages' => 1,
+                'has_next_page' => false,
+                'has_previous_page' => false,
+            ];
+
+            return $this->paginatedResponse(
+                $logs->toArray(),
+                $pagination,
+                "Logs for user {$validatedUserId} retrieved successfully"
+            )->withHeaders([
+                'X-User-ID' => $validatedUserId,
+                'X-Total-Count' => $logs->count(),
+                'X-API-Version' => config('api.version', '1.0')
+            ]);
+
+        } catch (TaskValidationException $e) {
+            throw $e;
+        } catch (\Exception $e) {
+            \Log::error('Unexpected error in LogController@byUser', [
+                'user_id' => $userId,
+                'error' => $e->getMessage()
+            ]);
+
+            throw new LoggingException(
+                'Failed to retrieve logs by user: ' . $e->getMessage(),
+                'by_user',
+                ['user_id' => $userId]
+            );
+        }
+    }
+
+    /**
+     * Get logs within date range
+     *
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function dateRange(Request $request): JsonResponse
+    {
+        try {
+            // Validate required parameters
+            $startDate = $request->get('start_date');
+            $endDate = $request->get('end_date');
+            
+            if (!$startDate || !$endDate) {
+                throw new TaskValidationException([
+                    'date_range' => ['Both start_date and end_date are required']
+                ], 'date_range');
+            }
+
+            try {
+                $startDate = Carbon::parse($startDate);
+                $endDate = Carbon::parse($endDate);
+            } catch (\Exception $e) {
+                throw new TaskValidationException([
+                    'date_format' => ['Invalid date format. Use ISO 8601 format (Y-m-d H:i:s)']
+                ], 'date_format');
+            }
+
+            if ($startDate->gte($endDate)) {
+                throw new TaskValidationException([
+                    'date_range' => ['Start date must be before end date']
+                ], 'date_range');
+            }
+
+            $limit = min(max((int) $request->query('limit', 100), 1), 1000);
+            
+            $logs = $this->logService->getLogsByDateRange($startDate, $endDate, $limit);
+            
+            $pagination = [
+                'current_page' => 1,
+                'per_page' => $limit,
+                'total' => $logs->count(),
+                'total_pages' => 1,
+                'has_next_page' => false,
+                'has_previous_page' => false,
+            ];
+
+            return $this->paginatedResponse(
+                $logs->toArray(),
+                $pagination,
+                "Logs for date range retrieved successfully"
+            )->withHeaders([
+                'X-Start-Date' => $startDate->toISOString(),
+                'X-End-Date' => $endDate->toISOString(),
+                'X-Total-Count' => $logs->count(),
+                'X-API-Version' => config('api.version', '1.0')
+            ]);
+
+        } catch (TaskValidationException $e) {
+            throw $e;
+        } catch (\Exception $e) {
+            \Log::error('Unexpected error in LogController@dateRange', [
+                'error' => $e->getMessage(),
+                'request_params' => $request->all()
+            ]);
+
+            throw new LoggingException(
+                'Failed to retrieve logs by date range: ' . $e->getMessage(),
+                'date_range'
+            );
+        }
+    }
+
+    /**
+     * Get recent logs (last N logs)
+     *
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function recent(Request $request): JsonResponse
+    {
+        try {
+            $limit = min(max((int) $request->query('limit', 100), 1), 1000);
+            
+            $logs = $this->logService->getRecentLogs($limit);
+            
+            return $this->successResponse(
+                $logs,
+                "Last {$limit} logs retrieved successfully",
+                200,
+                [
+                    'count' => $logs->count(),
+                    'limit' => $limit,
+                    'timestamp' => now()->toISOString()
+                ]
+            );
+
+        } catch (\Exception $e) {
+            \Log::error('Unexpected error in LogController@recent', [
+                'error' => $e->getMessage(),
+                'request_params' => $request->all()
+            ]);
+
+            throw new LoggingException(
+                'Failed to retrieve recent logs: ' . $e->getMessage(),
+                'recent'
+            );
+        }
+    }
+
+    /**
+     * Export logs based on filters
+     *
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function export(Request $request): JsonResponse
+    {
+        try {
+            $filters = $request->all();
+            
+            // Validate and parse date filters if provided
+            if (isset($filters['start_date'])) {
+                try {
+                    $filters['start_date'] = Carbon::parse($filters['start_date']);
+                } catch (\Exception $e) {
+                    throw new TaskValidationException(['start_date' => ['Invalid date format']], 'start_date');
+                }
+            }
+            
+            if (isset($filters['end_date'])) {
+                try {
+                    $filters['end_date'] = Carbon::parse($filters['end_date']);
+                } catch (\Exception $e) {
+                    throw new TaskValidationException(['end_date' => ['Invalid date format']], 'end_date');
+                }
+            }
+
+            $exportData = $this->logService->exportLogs($filters);
+            
+            return $this->successResponse(
+                $exportData,
+                'Logs exported successfully',
+                200,
+                [
+                    'total_exported' => count($exportData),
+                    'filters_applied' => array_keys($filters),
+                    'export_timestamp' => now()->toISOString()
+                ]
+            );
+
+        } catch (TaskValidationException $e) {
+            throw $e;
+        } catch (\Exception $e) {
+            \Log::error('Unexpected error in LogController@export', [
+                'error' => $e->getMessage(),
+                'request_params' => $request->all()
+            ]);
+
+            throw new LoggingException(
+                'Failed to export logs: ' . $e->getMessage(),
+                'export'
+            );
+        }
+    }
+
+    /**
+     * Get deletion logs for a specific task
+     *
+     * @param Request $request
+     * @param int $taskId
+     * @return JsonResponse
+     */
+    public function taskDeletionLogs(Request $request, int $taskId): JsonResponse
+    {
+        try {
+            $validatedId = ValidationHelper::validateTaskId($taskId);
+            $limit = min(max((int) $request->query('limit', 50), 1), 1000);
+            
+            $logs = $this->logService->getTaskDeletionLogs($validatedId, $limit);
+            
+            $pagination = [
+                'current_page' => 1,
+                'per_page' => $limit,
+                'total' => $logs->count(),
+                'total_pages' => 1,
+                'has_next_page' => false,
+                'has_previous_page' => false,
+            ];
+
+            return $this->paginatedResponse(
+                $logs->toArray(),
+                $pagination,
+                "Deletion logs for task {$validatedId} retrieved successfully"
+            )->withHeaders([
+                'X-Task-ID' => $validatedId,
+                'X-Log-Type' => 'deletion',
+                'X-Total-Count' => $logs->count(),
+                'X-API-Version' => config('api.version', '1.0')
+            ]);
+
+        } catch (TaskValidationException $e) {
+            throw $e;
+        } catch (\Exception $e) {
+            \Log::error('Unexpected error in LogController@taskDeletionLogs', [
+                'task_id' => $taskId,
+                'error' => $e->getMessage()
+            ]);
+
+            throw new LoggingException(
+                'Failed to retrieve task deletion logs: ' . $e->getMessage(),
+                'task_deletion_logs',
+                ['task_id' => $taskId]
+            );
+        }
+    }
+
+    /**
+     * Get recent deletion activity across all tasks
+     *
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function recentDeletions(Request $request): JsonResponse
+    {
+        try {
+            $limit = min(max((int) $request->query('limit', 100), 1), 1000);
+            
+            $logs = $this->logService->getRecentDeletionActivity($limit);
+            
+            return $this->successResponse(
+                $logs,
+                "Recent deletion activity retrieved successfully",
+                200,
+                [
+                    'count' => $logs->count(),
+                    'limit' => $limit,
+                    'activity_type' => 'deletion',
+                    'timestamp' => now()->toISOString()
+                ]
+            );
+
+        } catch (\Exception $e) {
+            \Log::error('Unexpected error in LogController@recentDeletions', [
+                'error' => $e->getMessage(),
+                'request_params' => $request->all()
+            ]);
+
+            throw new LoggingException(
+                'Failed to retrieve recent deletion activity: ' . $e->getMessage(),
+                'recent_deletions'
+            );
+        }
+    }
+
+    /**
+     * Get deletion statistics
+     *
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function deletionStats(Request $request): JsonResponse
+    {
+        try {
+            $startDate = null;
+            $endDate = null;
+            
+            if ($request->has('start_date')) {
+                try {
+                    $startDate = Carbon::parse($request->get('start_date'));
+                } catch (\Exception $e) {
+                    throw new TaskValidationException(['start_date' => ['Invalid date format']], 'start_date');
+                }
+            }
+            
+            if ($request->has('end_date')) {
+                try {
+                    $endDate = Carbon::parse($request->get('end_date'));
+                } catch (\Exception $e) {
+                    throw new TaskValidationException(['end_date' => ['Invalid date format']], 'end_date');
+                }
+            }
+
+            $stats = $this->logService->getDeletionStatistics($startDate, $endDate);
+
+            return $this->successResponse(
+                $stats,
+                'Deletion statistics retrieved successfully',
+                200,
+                [
+                    'period' => [
+                        'start_date' => $startDate?->toISOString(),
+                        'end_date' => $endDate?->toISOString()
+                    ],
+                    'stats_type' => 'deletion'
+                ]
+            );
+
+        } catch (TaskValidationException $e) {
+            throw $e;
+        } catch (\Exception $e) {
+            \Log::error('Unexpected error in LogController@deletionStats', [
+                'error' => $e->getMessage(),
+                'request_params' => $request->all()
+            ]);
+
+            throw new LoggingException(
+                'Failed to retrieve deletion statistics: ' . $e->getMessage(),
+                'deletion_stats'
+            );
+        }
+    }
+
+    /**
+     * Clean up old logs based on retention policy
+     *
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function cleanup(Request $request): JsonResponse
+    {
+        try {
+            $retentionDays = max((int) $request->query('retention_days', 90), 1);
+            
+            $deletedCount = $this->logService->cleanupOldLogs($retentionDays);
+            
+            return $this->successResponse(
+                [
+                    'deleted_logs_count' => $deletedCount,
+                    'retention_days' => $retentionDays,
+                    'cleanup_date' => now()->toISOString()
+                ],
+                'Log cleanup completed successfully',
+                200,
+                [
+                    'operation' => 'cleanup',
+                    'affected_records' => $deletedCount
+                ]
+            );
+
+        } catch (\Exception $e) {
+            \Log::error('Unexpected error in LogController@cleanup', [
+                'error' => $e->getMessage(),
+                'request_params' => $request->all()
+            ]);
+
+            throw new LoggingException(
+                'Failed to cleanup old logs: ' . $e->getMessage(),
+                'cleanup'
             );
         }
     }
@@ -195,9 +834,10 @@ class LogController extends Controller
             // If no id parameter, return last 30 logs
             $logs = $this->logService->getRecentLogs(30);
 
-            return $this->logResponse(
+            return $this->successResponse(
                 $logs,
                 'Last 30 application logs retrieved successfully',
+                200,
                 ['count' => $logs->count(), 'limit' => 30]
             );
 
