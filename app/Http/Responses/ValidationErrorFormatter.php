@@ -11,6 +11,8 @@ use Carbon\Carbon;
  * 
  * Provides consistent, structured validation error responses
  * with detailed field-level error information and metadata
+ * 
+ * @deprecated Use ErrorResponseFormatter::validationError() instead
  */
 class ValidationErrorFormatter
 {
@@ -29,50 +31,8 @@ class ValidationErrorFormatter
         array $context = [],
         int $statusCode = 422
     ): JsonResponse {
-        $response = [
-            'success' => false,
-            'timestamp' => Carbon::now()->toISOString(),
-            'error' => 'Validation Error',
-            'message' => $message,
-            'status_code' => $statusCode,
-            'error_code' => 'VALIDATION_FAILED',
-            'validation' => [
-                'errors' => self::formatErrors($errors),
-                'failed_fields' => array_keys($errors),
-                'error_count' => count($errors),
-            ]
-        ];
-
-        // Add context if provided
-        if (!empty($context)) {
-            $response['context'] = $context;
-        }
-
-        // Add debug information in debug mode
-        if (config('app.debug')) {
-            $response['debug'] = [
-                'raw_errors' => $errors,
-                'trace_summary' => self::getTraceContext(),
-            ];
-        }
-
-        // Add request information if available
-        if (request()) {
-            $response['request_info'] = [
-                'method' => request()->method(),
-                'url' => request()->fullUrl(),
-                'user_agent' => request()->userAgent(),
-                'ip' => request()->ip(),
-            ];
-        }
-
-        return response()->json($response, $statusCode)
-            ->withHeaders([
-                'Content-Type' => 'application/json',
-                'X-Error-Type' => 'validation',
-                'X-Error-Count' => count($errors),
-                'X-Timestamp' => Carbon::now()->toISOString(),
-            ]);
+        // Use the new centralized error formatter
+        return ErrorResponseFormatter::validationError($errors, $message, $context);
     }
 
     /**
@@ -86,96 +46,11 @@ class ValidationErrorFormatter
         ValidationException $exception, 
         array $context = []
     ): JsonResponse {
-        return self::format(
+        return ErrorResponseFormatter::validationError(
             $exception->errors(),
             $exception->getMessage() ?: 'The given data was invalid',
-            $context,
-            422
+            $context
         );
-    }
-
-    /**
-     * Format errors into a structured format with field details
-     *
-     * @param array $errors Raw validation errors
-     * @return array Formatted errors
-     */
-    private static function formatErrors(array $errors): array
-    {
-        $formatted = [];
-
-        foreach ($errors as $field => $messages) {
-            $formatted[$field] = [
-                'messages' => is_array($messages) ? $messages : [$messages],
-                'first_message' => is_array($messages) ? reset($messages) : $messages,
-                'rule_failures' => self::extractRuleFailures($messages),
-            ];
-        }
-
-        return $formatted;
-    }
-
-    /**
-     * Extract failed validation rules from error messages
-     *
-     * @param array|string $messages Error messages
-     * @return array Array of failed rules
-     */
-    private static function extractRuleFailures($messages): array
-    {
-        $rules = [];
-        $messageArray = is_array($messages) ? $messages : [$messages];
-
-        foreach ($messageArray as $message) {
-            // Common validation rule patterns
-            if (strpos($message, 'required') !== false) {
-                $rules[] = 'required';
-            }
-            if (strpos($message, 'must be') !== false && strpos($message, 'characters') !== false) {
-                $rules[] = preg_match('/min:\d+|max:\d+/', $message, $matches) ? $matches[0] : 'length';
-            }
-            if (strpos($message, 'valid') !== false && strpos($message, 'format') !== false) {
-                $rules[] = 'format';
-            }
-            if (strpos($message, 'integer') !== false) {
-                $rules[] = 'integer';
-            }
-            if (strpos($message, 'string') !== false) {
-                $rules[] = 'string';
-            }
-            if (strpos($message, 'date') !== false) {
-                $rules[] = 'date';
-            }
-            if (strpos($message, 'selected') !== false && strpos($message, 'invalid') !== false) {
-                $rules[] = 'in';
-            }
-        }
-
-        return array_unique($rules);
-    }
-
-    /**
-     * Get simplified trace context for debugging
-     *
-     * @return array
-     */
-    private static function getTraceContext(): array
-    {
-        $trace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 5);
-        $context = [];
-
-        foreach ($trace as $index => $frame) {
-            if ($index > 2) break; // Only get first few frames
-            
-            $context[] = [
-                'file' => basename($frame['file'] ?? 'unknown'),
-                'line' => $frame['line'] ?? 0,
-                'function' => $frame['function'] ?? 'unknown',
-                'class' => $frame['class'] ?? null,
-            ];
-        }
-
-        return $context;
     }
 
     /**
@@ -194,7 +69,7 @@ class ValidationErrorFormatter
             $errors[$field] = ["The {$field} field is required."];
         }
 
-        return self::format($errors, $message, [
+        return ErrorResponseFormatter::validationError($errors, $message, [
             'missing_fields' => $missingFields,
             'suggestion' => 'Please provide all required fields in your request.'
         ]);
@@ -216,7 +91,7 @@ class ValidationErrorFormatter
             $errors[$field] = ["The {$field} field must be a valid {$requirement}."];
         }
 
-        return self::format($errors, $message, [
+        return ErrorResponseFormatter::validationError($errors, $message, [
             'invalid_formats' => $invalidFields,
             'suggestion' => 'Please check the format requirements for each field.'
         ]);

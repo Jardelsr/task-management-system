@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Repositories\TaskRepositoryInterface;
 use App\Services\LogServiceInterface;
+use App\Services\ErrorLoggingService;
 use App\Exceptions\TaskNotFoundException;
 use App\Exceptions\TaskValidationException;
 use App\Exceptions\TaskOperationException;
@@ -120,8 +121,14 @@ class TaskController extends Controller
 
     public function store(Request $request): JsonResponse
     {
+        $startTime = microtime(true);
+        
         try {
-            $startTime = microtime(true);
+            // Log the start of task creation
+            ErrorLoggingService::logTaskOperation('create_start', null, [
+                'request_size' => strlen(json_encode($request->all())),
+                'ip_address' => $request->ip()
+            ]);
             
             // Rate limiting for task creation
             $this->checkRateLimit(
@@ -149,11 +156,10 @@ class TaskController extends Controller
                         $this->logTaskCreation($task, $validatedData, $request);
                     },
                     function () use ($task) {
-                        // Fallback logging
-                        \Log::info('Task created (fallback log)', [
-                            'task_id' => $task->id,
+                        // Fallback logging using ErrorLoggingService
+                        ErrorLoggingService::logTaskOperation('create_fallback', $task->id, [
                             'title' => $task->title,
-                            'timestamp' => Carbon::now()->toISOString()
+                            'fallback_reason' => 'Primary logging failed'
                         ]);
                     },
                     'task_creation_logging'
@@ -161,21 +167,39 @@ class TaskController extends Controller
                 
                 // Performance metrics logging
                 $executionTime = microtime(true) - $startTime;
-                $this->logPerformanceMetrics('task_create', $executionTime, [
+                ErrorLoggingService::logPerformanceMetrics('task_create', $executionTime, [
                     'task_id' => $task->id,
                     'data_size_kb' => round(strlen(json_encode($validatedData)) / 1024, 2)
+                ]);
+                
+                // Log successful task creation
+                ErrorLoggingService::logTaskOperation('create_success', $task->id, [
+                    'title' => $task->title,
+                    'priority' => $task->priority,
+                    'execution_time_ms' => round($executionTime * 1000, 2)
                 ]);
                 
                 return $this->createdResponse($task->toArray(), 'Task created successfully');
             }, 'task_creation');
             
         } catch (TaskValidationException $e) {
+            // Log validation errors
+            ErrorLoggingService::logValidationError(
+                method_exists($e, 'getErrors') ? $e->getErrors() : ['general' => [$e->getMessage()]],
+                $request,
+                [
+                    'operation' => 'task_creation',
+                    'execution_time_ms' => round((microtime(true) - $startTime) * 1000, 2)
+                ]
+            );
             throw $e;
+            
         } catch (\Exception $e) {
-            Log::error('Unexpected error in task creation', [
-                'error' => $e->getMessage(),
-                'request_data' => $request->all(),
-                'trace' => $e->getTraceAsString()
+            // Log unexpected errors with comprehensive context
+            ErrorLoggingService::logError($e, $request, [
+                'operation' => 'task_creation',
+                'execution_time_ms' => round((microtime(true) - $startTime) * 1000, 2),
+                'request_data' => $request->all()
             ]);
             
             throw new TaskOperationException(

@@ -175,7 +175,7 @@ class TaskNotFoundException extends Exception
      *
      * @return array
      */
-    private function getSuggestions(): array
+    public function getSuggestions(): array
     {
         $suggestions = [
             'Verify the task ID is correct',

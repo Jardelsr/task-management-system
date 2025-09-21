@@ -24,6 +24,11 @@
 |--------------------------------------------------------------------------
 */
 
+// System health endpoints
+$router->get('/health', 'HealthController@getHealth');
+$router->get('/health/database/{connection}', 'HealthController@testConnection');
+$router->get('/health/config', 'HealthController@getDatabaseConfig');
+
 // Health check and API overview route
 $router->get('/', function () use ($router) {
     return response()->json([
@@ -421,33 +426,31 @@ $router->addRoute('OPTIONS', '{route:.*}', function () {
 // Method not allowed handler (must come before catch-all)
 $router->addRoute(['GET', 'POST', 'PUT', 'PATCH', 'DELETE'], '{route:.*}', function () use ($router) {
     
-    // Check if route exists but method is not allowed
+    // Use the centralized error response formatter
     $currentPath = request()->path();
     $currentMethod = request()->method();
     
-    return response()->json([
-        'error' => 'Route not found',
-        'message' => "The requested endpoint '{$currentPath}' does not exist or method '{$currentMethod}' is not allowed",
-        'request_details' => [
-            'path' => $currentPath,
-            'method' => $currentMethod,
-            'timestamp' => \Carbon\Carbon::now()->toISOString()
-        ],
-        'available_endpoints' => [
-            'api_v1' => [
-                'base' => url('/api/v1'),
-                'tasks' => url('/api/v1/tasks'),
-                'logs' => url('/api/v1/logs'),
-                'docs' => url('/api/v1/docs')
+    return \App\Http\Responses\ErrorResponseFormatter::notFound(
+        'Route',
+        null,
+        "The requested endpoint '{$currentPath}' does not exist or method '{$currentMethod}' is not allowed",
+        [
+            'available_endpoints' => [
+                'api_v1' => [
+                    'base' => url('/api/v1'),
+                    'tasks' => url('/api/v1/tasks'),
+                    'logs' => url('/api/v1/logs'),
+                    'docs' => url('/api/v1/docs')
+                ],
+                'legacy' => [
+                    'tasks' => url('/tasks'),
+                    'logs' => url('/logs')
+                ]
             ],
-            'legacy' => [
-                'tasks' => url('/tasks'),
-                'logs' => url('/logs')
+            'documentation' => [
+                'full_docs' => url('/api/v1/docs'),
+                'openapi' => url('/api/v1/openapi.json')
             ]
-        ],
-        'documentation' => [
-            'full_docs' => url('/api/v1/docs'),
-            'openapi' => url('/api/v1/openapi.json')
         ]
-    ], 404);
+    );
 });

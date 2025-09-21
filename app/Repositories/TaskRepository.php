@@ -5,6 +5,7 @@ namespace App\Repositories;
 use App\Models\Task;
 use Illuminate\Database\Eloquent\Collection;
 use Carbon\Carbon;
+use App\Services\DatabaseConnectionService;
 
 class TaskRepository implements TaskRepositoryInterface
 {
@@ -64,37 +65,25 @@ class TaskRepository implements TaskRepositoryInterface
      */
     public function create(array $data): Task
     {
-        try {
-            // Pre-creation hooks
-            $this->beforeTaskCreation($data);
-            
-            // Apply defaults and sanitization
-            $data = $this->prepareTaskData($data);
-            
-            // Create the task
-            $task = Task::create($data);
-            
-            // Post-creation hooks
-            $this->afterTaskCreation($task, $data);
-            
-            return $task;
-        } catch (\Illuminate\Database\QueryException $e) {
-            $this->logDatabaseError('create', $e, $data);
-            throw new \App\Exceptions\DatabaseException(
-                'Failed to create task: ' . $e->getMessage(),
-                'create',
-                ['data' => $data],
-                500
-            );
-        } catch (\Exception $e) {
-            $this->logUnexpectedError('create', $e, $data);
-            throw new \App\Exceptions\TaskOperationException(
-                'Unexpected error during task creation: ' . $e->getMessage(),
-                'create',
-                null,
-                500
-            );
-        }
+        return DatabaseConnectionService::executeWithRetry(
+            function() use ($data) {
+                // Pre-creation hooks
+                $this->beforeTaskCreation($data);
+                
+                // Apply defaults and sanitization
+                $preparedData = $this->prepareTaskData($data);
+                
+                // Create the task
+                $task = Task::create($preparedData);
+                
+                // Post-creation hooks
+                $this->afterTaskCreation($task, $preparedData);
+                
+                return $task;
+            },
+            'create_task',
+            'mysql'
+        );
     }
 
     /**

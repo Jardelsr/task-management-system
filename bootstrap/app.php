@@ -49,6 +49,18 @@ $app->configure('errors');
 $app->configure('api');
 $app->configure('validation_messages');
 $app->configure('log_responses');
+$app->configure('logging');
+
+/*
+|--------------------------------------------------------------------------
+| Register Middleware
+|--------------------------------------------------------------------------
+*/
+
+// Register the logging middleware
+$app->middleware([
+    App\Http\Middleware\RequestResponseLoggingMiddleware::class
+]);
 
 /*
 |--------------------------------------------------------------------------
@@ -59,6 +71,7 @@ $app->configure('log_responses');
 // Register services in the correct order for Lumen 11
 $app->register(MongoDB\Laravel\MongoDBServiceProvider::class);
 $app->register(App\Providers\MongoDBConnectionServiceProvider::class);
+$app->register(App\Providers\LoggingServiceProvider::class);
 $app->register(App\Providers\ValidationServiceProvider::class);
 $app->register(App\Providers\AppServiceProvider::class);
 
