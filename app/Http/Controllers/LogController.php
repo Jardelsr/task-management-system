@@ -9,6 +9,7 @@ use App\Exceptions\TaskValidationException;
 use App\Http\Requests\ValidationHelper;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Validation\Rule;
 use Carbon\Carbon;
 
 class LogController extends Controller
@@ -76,14 +77,42 @@ class LogController extends Controller
                 ]);
             }
 
-            // Sanitize and validate request parameters using comprehensive filtering rules
+            // Sanitize and validate request parameters with graceful fallbacks
             $sanitizedData = ValidationHelper::sanitizeInput($request->all());
+            
+            // Handle limit parameter gracefully
+            if (isset($sanitizedData['limit'])) {
+                $limit = $sanitizedData['limit'];
+                if (!is_numeric($limit) || $limit < 1) {
+                    $sanitizedData['limit'] = 50; // Default fallback
+                } else {
+                    $sanitizedData['limit'] = min(max((int) $limit, 1), 1000); // Enforce bounds
+                }
+            }
+            
+            // Handle page parameter gracefully
+            if (isset($sanitizedData['page'])) {
+                $page = $sanitizedData['page'];
+                if (!is_numeric($page) || $page < 1) {
+                    $sanitizedData['page'] = 1; // Default fallback
+                } else {
+                    $sanitizedData['page'] = max((int) $page, 1);
+                }
+            }
+            
             $request->replace($sanitizedData);
 
-            // Use LogValidationRequest for comprehensive filtering validation
+            // Use selective validation only for critical parameters
+            $criticalValidationRules = [
+                'start_date' => ['date', 'date_format:Y-m-d H:i:s'],
+                'end_date' => ['date', 'date_format:Y-m-d H:i:s', 'after:start_date'],
+                'sort_by' => ['string', Rule::in(['created_at', 'action', 'task_id', 'user_id'])],
+                'sort_order' => ['string', Rule::in(['asc', 'desc'])],
+            ];
+
             $validator = app('validator')->make(
-                $request->all(),
-                \App\Http\Requests\LogValidationRequest::getFilterValidationRules(),
+                $request->only(array_keys($criticalValidationRules)),
+                $criticalValidationRules,
                 \App\Http\Requests\LogValidationRequest::getFilterValidationMessages()
             );
 
@@ -95,7 +124,7 @@ class LogController extends Controller
                 );
             }
 
-            $validatedParams = $validator->validated();
+            $validatedParams = array_merge($sanitizedData, $validator->validated());
             
             // Response formatting options
             $responseOptions = [
@@ -168,14 +197,14 @@ class LogController extends Controller
      * Display logs for a specific task
      *
      * @param Request $request
-     * @param int $id
+     * @param int $taskId
      * @return JsonResponse
      */
-    public function taskLogs(Request $request, int $id): JsonResponse
+    public function taskLogs(Request $request, int $taskId): JsonResponse
     {
         try {
             // Validate task ID format
-            $validatedId = ValidationHelper::validateTaskId($id);
+            $validatedId = ValidationHelper::validateTaskId($taskId);
             
             $limit = min(max((int) $request->query('limit', 50), 1), 1000);
 
@@ -539,7 +568,7 @@ class LogController extends Controller
                 [
                     'count' => $logs->count(),
                     'limit' => $limit,
-                    'timestamp' => now()->toISOString()
+                    'timestamp' => Carbon::now()->toISOString()
                 ]
             );
 
@@ -593,7 +622,7 @@ class LogController extends Controller
                 [
                     'total_exported' => count($exportData),
                     'filters_applied' => array_keys($filters),
-                    'export_timestamp' => now()->toISOString()
+                    'export_timestamp' => Carbon::now()->toISOString()
                 ]
             );
 
@@ -684,7 +713,7 @@ class LogController extends Controller
                     'count' => $logs->count(),
                     'limit' => $limit,
                     'activity_type' => 'deletion',
-                    'timestamp' => now()->toISOString()
+                    'timestamp' => Carbon::now()->toISOString()
                 ]
             );
 
@@ -776,7 +805,7 @@ class LogController extends Controller
                 [
                     'deleted_logs_count' => $deletedCount,
                     'retention_days' => $retentionDays,
-                    'cleanup_date' => now()->toISOString()
+                    'cleanup_date' => Carbon::now()->toISOString()
                 ],
                 'Log cleanup completed successfully',
                 200,

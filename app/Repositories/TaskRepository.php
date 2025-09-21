@@ -37,6 +37,24 @@ class TaskRepository implements TaskRepositoryInterface
     }
 
     /**
+     * Find a task by ID or throw an exception if not found
+     *
+     * @param int $id
+     * @return Task
+     * @throws \App\Exceptions\TaskNotFoundException
+     */
+    public function findByIdOrFail(int $id): Task
+    {
+        $task = Task::find($id);
+        
+        if (!$task) {
+            throw new \App\Exceptions\TaskNotFoundException($id, 'find');
+        }
+        
+        return $task;
+    }
+
+    /**
      * Create a new task with enhanced logging and validation
      *
      * @param array $data
@@ -811,6 +829,25 @@ class TaskRepository implements TaskRepositoryInterface
     }
 
     /**
+     * Log task creation operation
+     *
+     * @param int $taskId
+     * @param array $taskData
+     * @return void
+     */
+    private function logTaskCreate(int $taskId, array $taskData): void
+    {
+        try {
+            \App\Models\TaskLog::logCreated($taskId, $taskData);
+        } catch (\Exception $e) {
+            \Log::error('Failed to log task creation', [
+                'task_id' => $taskId,
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
+    /**
      * Hook executed before task creation
      *
      * @param array $data
@@ -878,6 +915,9 @@ class TaskRepository implements TaskRepositoryInterface
      */
     private function afterTaskCreation(Task $task, array $originalData): void
     {
+        // Log to MongoDB for audit trail
+        $this->logTaskCreate($task->id, $task->toArray());
+        
         // Log successful creation
         \Log::info('Task created successfully', [
             'task_id' => $task->id,

@@ -183,13 +183,16 @@ class LogRepository implements LogRepositoryInterface
      */
     public function logCreated(int $taskId, array $taskData, array $userInfo = []): TaskLog
     {
+        $userName = $userInfo['user_name'] ?? $userInfo['name'] ?? 'System';
+        
         return $this->create([
             'task_id' => $taskId,
             'action' => TaskLog::ACTION_CREATED,
-            'old_data' => null,
+            'old_data' => [],
             'new_data' => $taskData,
-            'user_id' => $userInfo['id'] ?? null,
-            'user_name' => $userInfo['name'] ?? null,
+            'user_id' => $userInfo['user_id'] ?? $userInfo['id'] ?? null,
+            'user_name' => $userName,
+            'description' => "{$userName} created task #{$taskId}",
         ]);
     }
 
@@ -204,13 +207,16 @@ class LogRepository implements LogRepositoryInterface
      */
     public function logUpdated(int $taskId, array $oldData, array $newData, array $userInfo = []): TaskLog
     {
+        $userName = $userInfo['user_name'] ?? $userInfo['name'] ?? 'System';
+        
         return $this->create([
             'task_id' => $taskId,
             'action' => TaskLog::ACTION_UPDATED,
             'old_data' => $oldData,
             'new_data' => $newData,
-            'user_id' => $userInfo['id'] ?? null,
-            'user_name' => $userInfo['name'] ?? null,
+            'user_id' => $userInfo['user_id'] ?? $userInfo['id'] ?? null,
+            'user_name' => $userName,
+            'description' => "{$userName} updated task #{$taskId}",
         ]);
     }
 
@@ -224,13 +230,16 @@ class LogRepository implements LogRepositoryInterface
      */
     public function logDeleted(int $taskId, array $taskData, array $userInfo = []): TaskLog
     {
+        $userName = $userInfo['user_name'] ?? $userInfo['name'] ?? 'System';
+        
         return $this->create([
             'task_id' => $taskId,
             'action' => TaskLog::ACTION_DELETED,
             'old_data' => $taskData,
-            'new_data' => null,
-            'user_id' => $userInfo['id'] ?? null,
-            'user_name' => $userInfo['name'] ?? null,
+            'new_data' => [],
+            'user_id' => $userInfo['user_id'] ?? $userInfo['id'] ?? null,
+            'user_name' => $userName,
+            'description' => "{$userName} deleted task #{$taskId}",
         ]);
     }
 
@@ -410,16 +419,26 @@ class LogRepository implements LogRepositoryInterface
         
         $totalLogs = $query->count();
         
-        $logsByAction = $query->groupBy('action')
-            ->selectRaw('action, count(*) as count')
-            ->pluck('count', 'action')
-            ->toArray();
+        // Get logs by action using MongoDB aggregation
+        $logsByAction = [];
+        $actions = ['created', 'updated', 'deleted', 'restored', 'force_deleted', 'update_attempt'];
+        
+        foreach ($actions as $action) {
+            $logsByAction[$action] = TaskLog::where('action', $action)->count();
+        }
             
-        $recentActivity = $query->where('created_at', '>=', Carbon::now()->subDays(7))
-            ->groupBy('action')
-            ->selectRaw('action, count(*) as count')
-            ->pluck('count', 'action')
-            ->toArray();
+        // Get recent activity (last 7 days) using MongoDB queries
+        $recentActivity = [];
+        $recentDate = Carbon::now()->subDays(7);
+        
+        foreach ($actions as $action) {
+            $count = TaskLog::where('action', $action)
+                ->where('created_at', '>=', $recentDate)
+                ->count();
+            if ($count > 0) {
+                $recentActivity[$action] = $count;
+            }
+        }
 
         return [
             'total_logs' => $totalLogs,
@@ -428,6 +447,8 @@ class LogRepository implements LogRepositoryInterface
                 'updated' => $logsByAction['updated'] ?? 0,
                 'deleted' => $logsByAction['deleted'] ?? 0,
                 'restored' => $logsByAction['restored'] ?? 0,
+                'force_deleted' => $logsByAction['force_deleted'] ?? 0,
+                'update_attempt' => $logsByAction['update_attempt'] ?? 0,
             ],
             'recent_activity' => $recentActivity,
             'date_range' => [
@@ -715,7 +736,7 @@ class LogRepository implements LogRepositoryInterface
                     'start' => $startDate?->toISOString(),
                     'end' => $endDate?->toISOString()
                 ],
-                'execution_time' => microtime(true) - (LARAVEL_START ?? microtime(true))
+                'execution_time' => microtime(true) - ($_SERVER['REQUEST_TIME_FLOAT'] ?? microtime(true))
             ]
         ];
     }

@@ -97,13 +97,16 @@ class TaskLog extends Model
      */
     public static function logCreated(int $taskId, array $taskData, array $userInfo = []): self
     {
+        $userName = $userInfo['user_name'] ?? 'System';
+        
         return self::create([
             'task_id' => $taskId,
             'action' => self::ACTION_CREATED,
             'old_data' => [],
             'new_data' => $taskData,
             'user_id' => $userInfo['user_id'] ?? null,
-            'user_name' => $userInfo['user_name'] ?? 'System',
+            'user_name' => $userName,
+            'description' => "{$userName} created task #{$taskId}",
         ]);
     }
 
@@ -118,13 +121,16 @@ class TaskLog extends Model
      */
     public static function logUpdated(int $taskId, array $oldData, array $newData, array $userInfo = []): self
     {
+        $userName = $userInfo['user_name'] ?? 'System';
+        
         return self::create([
             'task_id' => $taskId,
             'action' => self::ACTION_UPDATED,
             'old_data' => $oldData,
             'new_data' => $newData,
             'user_id' => $userInfo['user_id'] ?? null,
-            'user_name' => $userInfo['user_name'] ?? 'System',
+            'user_name' => $userName,
+            'description' => "{$userName} updated task #{$taskId}",
         ]);
     }
 
@@ -138,13 +144,16 @@ class TaskLog extends Model
      */
     public static function logDeleted(int $taskId, array $taskData, array $userInfo = []): self
     {
+        $userName = $userInfo['user_name'] ?? 'System';
+        
         return self::create([
             'task_id' => $taskId,
             'action' => self::ACTION_DELETED,
             'old_data' => $taskData,
             'new_data' => [],
             'user_id' => $userInfo['user_id'] ?? null,
-            'user_name' => $userInfo['user_name'] ?? 'System',
+            'user_name' => $userName,
+            'description' => "{$userName} deleted task #{$taskId}",
         ]);
     }
 
@@ -158,13 +167,16 @@ class TaskLog extends Model
      */
     public static function logRestored(int $taskId, array $taskData, array $userInfo = []): self
     {
+        $userName = $userInfo['user_name'] ?? 'System';
+        
         return self::create([
             'task_id' => $taskId,
             'action' => self::ACTION_RESTORED,
             'old_data' => [],
             'new_data' => $taskData,
             'user_id' => $userInfo['user_id'] ?? null,
-            'user_name' => $userInfo['user_name'] ?? 'System',
+            'user_name' => $userName,
+            'description' => "{$userName} restored task #{$taskId}",
         ]);
     }
 
@@ -178,13 +190,16 @@ class TaskLog extends Model
      */
     public static function logForceDeleted(int $taskId, array $taskData, array $userInfo = []): self
     {
+        $userName = $userInfo['user_name'] ?? 'System';
+        
         return self::create([
             'task_id' => $taskId,
             'action' => self::ACTION_FORCE_DELETED,
             'old_data' => $taskData,
             'new_data' => [],
             'user_id' => $userInfo['user_id'] ?? null,
-            'user_name' => $userInfo['user_name'] ?? 'System',
+            'user_name' => $userName,
+            'description' => "{$userName} permanently deleted task #{$taskId}",
         ]);
     }
 

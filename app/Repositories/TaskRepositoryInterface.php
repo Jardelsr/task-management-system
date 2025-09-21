@@ -24,6 +24,15 @@ interface TaskRepositoryInterface
     public function findById(int $id): ?Task;
 
     /**
+     * Find a task by ID or throw an exception if not found
+     *
+     * @param int $id
+     * @return Task
+     * @throws \App\Exceptions\TaskNotFoundException
+     */
+    public function findByIdOrFail(int $id): Task;
+
+    /**
      * Create a new task
      *
      * @param array $data

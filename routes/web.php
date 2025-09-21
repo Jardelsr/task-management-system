@@ -227,9 +227,9 @@ $router->group([
 
     /*
     |--------------------------------------------------------------------------
-    | Audit Log Management Routes  
+    | V1 API Log Routes
     |--------------------------------------------------------------------------
-    | Comprehensive logging and audit trail operations
+    | Comprehensive audit trail and activity log operations for API v1
     */
     
     $router->group([
@@ -238,11 +238,11 @@ $router->group([
     ], function () use ($router) {
         
         /*
-        | Static Log Routes (Must come BEFORE variable routes)
+        | Log Collection Routes
         | Statistical, aggregate, and filtered log operations
         */
         
-        // Statistical and aggregate routes
+        // Statistical and aggregate routes (must be before variable routes)
         $router->get('/stats', 'LogController@stats');
         $router->get('/export', 'LogController@export');
         $router->get('/recent', 'LogController@recent');
@@ -264,7 +264,7 @@ $router->group([
         $router->delete('/cleanup', 'LogController@cleanup');
         
         /*
-        | Variable Log Routes (Must come AFTER static routes)
+        | Log Resource Routes
         | Individual log operations with variable parameters
         */
         
@@ -273,72 +273,73 @@ $router->group([
         $router->get('/{id}', 'LogController@show');                  // Show specific log
     });
 
-    /*
-    |--------------------------------------------------------------------------
-    | User Management Routes (Future Enhancement)
-    |--------------------------------------------------------------------------
-    | Prepared for user authentication and management features
-    */
-    
-    $router->group([
-        'prefix' => 'users',
-        'middleware' => [] // Add auth middleware: ['auth', 'admin']
-    ], function () use ($router) {
-        
-        // User CRUD operations (commented out - implement when auth is added)
-        // $router->get('/', 'UserController@index');
-        // $router->post('/', 'UserController@store');
-        // $router->get('/{id:[0-9]+}', 'UserController@show');
-        // $router->put('/{id:[0-9]+}', 'UserController@update');
-        // $router->delete('/{id:[0-9]+}', 'UserController@destroy');
-        
-        // Placeholder route
-        $router->get('/', function () {
-            return response()->json([
-                'message' => 'User management not yet implemented',
-                'planned_features' => [
-                    'user_authentication',
-                    'role_management', 
-                    'task_assignment',
-                    'user_profiles'
-                ]
-            ], 501);
-        });
-    });
+}); // End of v1 API group
 
-    /*
-    |--------------------------------------------------------------------------
-    | System Administration Routes  
-    |--------------------------------------------------------------------------
-    | System management and administrative operations
-    */
+/*
+|--------------------------------------------------------------------------
+| System Administration Routes  
+|--------------------------------------------------------------------------
+| System management and administrative operations
+*/
+
+$router->group([
+    'prefix' => 'admin',
+    'middleware' => [] // Add admin middleware: ['auth', 'admin']
+], function () use ($router) {
     
-    $router->group([
-        'prefix' => 'admin',
-        'middleware' => [] // Add admin middleware: ['auth', 'admin']
-    ], function () use ($router) {
-        
-        // System status and monitoring
-        $router->get('/status', 'AdminController@systemStatus');
-        $router->get('/metrics', 'AdminController@metrics');
-        
-        // Database operations
-        $router->post('/cache/clear', 'AdminController@clearCache');
-        $router->post('/maintenance', 'AdminController@enableMaintenance');
-        $router->delete('/maintenance', 'AdminController@disableMaintenance');
-        
-        // Placeholder for admin routes
-        $router->get('/', function () {
-            return response()->json([
-                'message' => 'System administration panel',
-                'available_operations' => [
-                    'system_status',
-                    'performance_metrics',
-                    'cache_management',
-                    'maintenance_mode'
-                ]
-            ]);
-        });
+    // System status and monitoring
+    $router->get('/status', 'AdminController@systemStatus');
+    $router->get('/metrics', 'AdminController@metrics');
+    
+    // Database operations
+    $router->post('/cache/clear', 'AdminController@clearCache');
+    $router->post('/maintenance', 'AdminController@enableMaintenance');
+    $router->delete('/maintenance', 'AdminController@disableMaintenance');
+    
+    // Placeholder for admin routes
+    $router->get('/', function () {
+        return response()->json([
+            'message' => 'System administration panel',
+            'available_operations' => [
+                'system_status',
+                'performance_metrics',
+                'cache_management',
+                'maintenance_mode'
+            ]
+        ]);
+    });
+});
+
+/*
+|--------------------------------------------------------------------------
+| User Management Routes (Future Enhancement)
+|--------------------------------------------------------------------------
+| Prepared for user authentication and management features
+*/
+
+$router->group([
+    'prefix' => 'users',
+    'middleware' => [] // Add auth middleware: ['auth', 'admin']
+], function () use ($router) {
+    
+    // User CRUD operations (commented out - implement when auth is added)
+    // $router->get('/', 'UserController@index');
+    // $router->post('/', 'UserController@store');
+    // $router->get('/{id:[0-9]+}', 'UserController@show');
+    // $router->put('/{id:[0-9]+}', 'UserController@update');
+    // $router->delete('/{id:[0-9]+}', 'UserController@destroy');
+    
+    // Placeholder route
+    $router->get('/', function () {
+        return response()->json([
+            'message' => 'User management not yet implemented',
+            'planned_features' => [
+                'user_authentication',
+                'role_management', 
+                'task_assignment',
+                'user_profiles'
+            ]
+        ], 501);
     });
 });
 
