@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use App\Models\Task;
 use App\Exceptions\TaskValidationException;
+use App\Services\ValidationMessageService;
 use Carbon\Carbon;
 
 class ValidationHelper
@@ -29,7 +30,7 @@ class ValidationHelper
             'sort_order' => 'sometimes|in:asc,desc',
             'limit' => 'sometimes|integer|min:1|max:1000',
             'page' => 'sometimes|integer|min:1'
-        ]);
+        ], ValidationMessageService::getFilteringMessages());
 
         if ($validator->fails()) {
             throw new TaskValidationException(

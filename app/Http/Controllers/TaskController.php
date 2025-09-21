@@ -120,17 +120,10 @@ class TaskController extends Controller
     public function store(Request $request): JsonResponse
     {
         try {
-            $validator = app('validator')->make(
-                $request->all(), 
-                CreateTaskRequest::getValidationRules(),
-                CreateTaskRequest::getValidationMessages()
-            );
-
-            if ($validator->fails()) {
-                throw new TaskValidationException($validator->errors()->toArray());
-            }
-
-            $validatedData = $validator->validated();
+            // Use FormRequest for validation
+            $createRequest = CreateTaskRequest::createFromRequest($request);
+            $validatedData = $createRequest->validated();
+            
             $task = $this->taskRepository->create($validatedData);
             
             // Enhanced logging for task creation
@@ -169,9 +162,9 @@ class TaskController extends Controller
                 );
             }
 
-            // Validate and prepare update data with comprehensive validation
-            $inputData = $request->all();
-            $validatedData = ValidationHelper::validateAndPrepareUpdateData($inputData, $task);
+            // Use FormRequest for validation
+            $updateRequest = UpdateTaskRequest::createFromRequest($request);
+            $validatedData = $updateRequest->validated();
 
             // Skip update if no valid data provided
             if (empty($validatedData)) {
@@ -181,22 +174,11 @@ class TaskController extends Controller
                 );
             }
 
-            // Additional Laravel validation as backup
-            $validator = app('validator')->make(
-                $validatedData, 
-                UpdateTaskRequest::getPartialUpdateRules($validatedData),
-                UpdateTaskRequest::getValidationMessages()
-            );
-
-            if ($validator->fails()) {
-                throw new TaskValidationException($validator->errors()->toArray());
-            }
-
             // Store original data for comparison
             $originalData = $task->toArray();
 
             // Perform the partial update - repository will throw TaskNotFoundException if task doesn't exist
-            $updatedTask = $this->taskRepository->update($validatedId, $validator->validated());
+            $updatedTask = $this->taskRepository->update($validatedId, $validatedData);
 
             // Determine what fields were actually changed
             $changedFields = $this->getChangedFields($originalData, $updatedTask->toArray());

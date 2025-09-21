@@ -4,8 +4,9 @@ namespace App\Http\Requests;
 
 use Illuminate\Validation\Rule;
 use App\Models\Task;
+use App\Services\ValidationMessageService;
 
-class CreateTaskRequest
+class CreateTaskRequest extends FormRequest
 {
     /**
      * Get the validation rules that apply to the request.
@@ -35,15 +36,18 @@ class CreateTaskRequest
     public static function getValidationRules(): array
     {
         return [
-            'title' => 'required|string|max:255',
+            'title' => 'required|string|max:255|min:1',
             'description' => 'nullable|string|max:1000',
             'status' => [
                 'sometimes',
+                'nullable',
+                'string',
                 Rule::in(Task::getAvailableStatuses())
             ],
             'created_by' => 'nullable|integer|min:1',
             'assigned_to' => 'nullable|integer|min:1',
-            'due_date' => 'nullable|date|after:now'
+            'due_date' => 'nullable|date|after:now',
+            'priority' => 'sometimes|nullable|string|in:low,medium,high'
         ];
     }
 
@@ -54,19 +58,6 @@ class CreateTaskRequest
      */
     public static function getValidationMessages(): array
     {
-        return [
-            'title.required' => 'The task title is required.',
-            'title.string' => 'The task title must be a valid string.',
-            'title.max' => 'The task title may not be greater than 255 characters.',
-            'description.string' => 'The description must be a valid string.',
-            'description.max' => 'The description may not be greater than 1000 characters.',
-            'status.in' => 'The selected status is invalid. Valid options are: ' . implode(', ', Task::getAvailableStatuses()),
-            'created_by.integer' => 'The created by field must be a valid integer.',
-            'created_by.min' => 'The created by field must be at least 1.',
-            'assigned_to.integer' => 'The assigned to field must be a valid integer.',
-            'assigned_to.min' => 'The assigned to field must be at least 1.',
-            'due_date.date' => 'The due date must be a valid date.',
-            'due_date.after' => 'The due date must be a date after today.'
-        ];
+        return ValidationMessageService::getTaskCreationMessages();
     }
 }

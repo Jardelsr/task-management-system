@@ -47,6 +47,8 @@ $app->configure('database');
 $app->configure('mongo');
 $app->configure('errors');
 $app->configure('api');
+$app->configure('validation_messages');
+$app->configure('log_responses');
 
 /*
 |--------------------------------------------------------------------------
@@ -57,6 +59,7 @@ $app->configure('api');
 // Register services in the correct order for Lumen 11
 $app->register(MongoDB\Laravel\MongoDBServiceProvider::class);
 $app->register(App\Providers\MongoDBConnectionServiceProvider::class);
+$app->register(App\Providers\ValidationServiceProvider::class);
 $app->register(App\Providers\AppServiceProvider::class);
 
 /*

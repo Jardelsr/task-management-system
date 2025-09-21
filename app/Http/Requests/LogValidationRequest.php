@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use Illuminate\Validation\Rule;
+use App\Services\ValidationMessageService;
 use Carbon\Carbon;
 
 class LogValidationRequest
@@ -36,29 +37,7 @@ class LogValidationRequest
      */
     public static function getFilterValidationMessages(): array
     {
-        return [
-            'limit.integer' => 'The limit must be an integer.',
-            'limit.min' => 'The limit must be at least 1.',
-            'limit.max' => 'The limit must not exceed 1000.',
-            'page.integer' => 'The page must be an integer.',
-            'page.min' => 'The page must be at least 1.',
-            'sort_by.in' => 'The sort_by field must be one of: created_at, action, task_id, user_id.',
-            'sort_order.in' => 'The sort_order must be either asc or desc.',
-            'action.string' => 'The action must be a string.',
-            'action.max' => 'The action may not be greater than 100 characters.',
-            'task_id.integer' => 'The task_id must be an integer.',
-            'task_id.min' => 'The task_id must be at least 1.',
-            'user_id.integer' => 'The user_id must be an integer.',
-            'user_id.min' => 'The user_id must be at least 1.',
-            'start_date.date' => 'The start_date must be a valid date.',
-            'start_date.date_format' => 'The start_date must be in format: Y-m-d H:i:s.',
-            'end_date.date' => 'The end_date must be a valid date.',
-            'end_date.date_format' => 'The end_date must be in format: Y-m-d H:i:s.',
-            'end_date.after' => 'The end_date must be after the start_date.',
-            'level.in' => 'The level must be one of: info, warning, error, debug.',
-            'source.string' => 'The source must be a string.',
-            'source.max' => 'The source may not be greater than 100 characters.'
-        ];
+        return ValidationMessageService::getLogValidationMessages();
     }
 
     /**
@@ -82,16 +61,7 @@ class LogValidationRequest
      */
     public static function getDateRangeValidationMessages(): array
     {
-        return [
-            'start_date.required' => 'The start_date field is required.',
-            'start_date.date' => 'The start_date must be a valid date.',
-            'end_date.required' => 'The end_date field is required.',
-            'end_date.date' => 'The end_date must be a valid date.',
-            'end_date.after' => 'The end_date must be after the start_date.',
-            'limit.integer' => 'The limit must be an integer.',
-            'limit.min' => 'The limit must be at least 1.',
-            'limit.max' => 'The limit must not exceed 1000.'
-        ];
+        return ValidationMessageService::getDateRangeValidationMessages();
     }
 
     /**
@@ -120,22 +90,7 @@ class LogValidationRequest
      */
     public static function getExportValidationMessages(): array
     {
-        return [
-            'format.in' => 'The format must be one of: json, csv, xml.',
-            'start_date.date' => 'The start_date must be a valid date.',
-            'end_date.date' => 'The end_date must be a valid date.',
-            'end_date.after' => 'The end_date must be after the start_date.',
-            'action.string' => 'The action must be a string.',
-            'action.max' => 'The action may not be greater than 100 characters.',
-            'task_id.integer' => 'The task_id must be an integer.',
-            'task_id.min' => 'The task_id must be at least 1.',
-            'user_id.integer' => 'The user_id must be an integer.',
-            'user_id.min' => 'The user_id must be at least 1.',
-            'level.in' => 'The level must be one of: info, warning, error, debug.',
-            'max_records.integer' => 'The max_records must be an integer.',
-            'max_records.min' => 'The max_records must be at least 1.',
-            'max_records.max' => 'The max_records must not exceed 10,000.'
-        ];
+        return ValidationMessageService::getLogExportMessages();
     }
 
     /**
@@ -159,14 +114,7 @@ class LogValidationRequest
      */
     public static function getCleanupValidationMessages(): array
     {
-        return [
-            'retention_days.integer' => 'The retention_days must be an integer.',
-            'retention_days.min' => 'The retention_days must be at least 1.',
-            'retention_days.max' => 'The retention_days must not exceed 3,650 (10 years).',
-            'dry_run.boolean' => 'The dry_run must be true or false.',
-            'confirm.boolean' => 'The confirm must be true or false.',
-            'confirm.required_if' => 'The confirm field is required when not performing a dry run.'
-        ];
+        return ValidationMessageService::getLogCleanupMessages();
     }
 
     /**

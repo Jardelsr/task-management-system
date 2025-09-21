@@ -4,9 +4,10 @@ namespace App\Http\Requests;
 
 use Illuminate\Validation\Rule;
 use App\Models\Task;
+use App\Services\ValidationMessageService;
 use Carbon\Carbon;
 
-class UpdateTaskRequest
+class UpdateTaskRequest extends FormRequest
 {
     /**
      * Get the validation rules that apply to the request.
@@ -113,35 +114,7 @@ class UpdateTaskRequest
      */
     public static function getValidationMessages(): array
     {
-        return [
-            'title.required' => 'The task title is required.',
-            'title.string' => 'The task title must be a valid string.',
-            'title.min' => 'The task title must be at least 3 characters.',
-            'title.max' => 'The task title may not be greater than 255 characters.',
-            'title.regex' => 'The task title contains invalid characters. Only letters, numbers, spaces, and common punctuation are allowed.',
-            
-            'description.string' => 'The description must be a valid string.',
-            'description.max' => 'The description may not be greater than 1000 characters.',
-            
-            'status.required' => 'The status field is required when updating status.',
-            'status.string' => 'The status must be a valid string.',
-            'status.in' => 'The selected status is invalid. Valid options are: ' . implode(', ', Task::getAvailableStatuses()),
-            
-            'assigned_to.integer' => 'The assigned to field must be a valid integer.',
-            'assigned_to.min' => 'The assigned to field must be at least 1.',
-            'assigned_to.max' => 'The assigned to field must not exceed 999999.',
-            
-            'created_by.integer' => 'The created by field must be a valid integer.',
-            'created_by.min' => 'The created by field must be at least 1.',
-            'created_by.max' => 'The created by field must not exceed 999999.',
-            
-            'due_date.date' => 'The due date must be a valid date.',
-            'due_date.after' => 'The due date must be a date after now.',
-            'due_date.before' => 'The due date must be within the next 10 years.',
-            
-            'completed_at.date' => 'The completed at field must be a valid date.',
-            'completed_at.before_or_equal' => 'The completed at date cannot be in the future.'
-        ];
+        return ValidationMessageService::getTaskUpdateMessages();
     }
 
     /**
