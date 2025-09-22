@@ -1,536 +1,565 @@
 # Sistema de Gerenciamento de Tarefas
 
-Uma API moderna de gerenciamento de tarefas construída com Laravel Lumen, usando MySQL para armazenamento de tarefas e MongoDB para logs.
+Uma API RESTful robusta para gerenciamento de tarefas construída com Laravel Lumen, oferecendo recursos avançados como exclusão lógica (soft delete), auditoria de atividades e filtragem inteligente.
 
-## 🚀 Funcionalidades
+## 🚀 Características Principais
 
-- API RESTful para gerenciamento de tarefas
-- Banco de dados MySQL para arma- Usa padrão repository para manter o controller limpo e testável
+- **API RESTful Completa**: Operações CRUD completas para tarefas
+- **Soft Delete**: Exclusão recuperável de tarefas com possibilidade de restauração
+- **Sistema de Auditoria**: Registros completos no MongoDB para rastreamento de atividades
+- **Filtragem Avançada**: Sistema robusto de filtros, ordenação e paginação
+- **Documentação OpenAPI**: Documentação interativa Swagger/OpenAPI 3.0
+- **Tratamento de Erros**: Sistema abrangente de tratamento e validação de erros
+- **Versionamento de API**: API versionada com suporte a múltiplas versões
+- **Limitação de requisições**: Proteção contra abuso da API
 
-## 🛠 Stack
+## 🛠 Stack Tecnológica
 
-- PHP 8.2
-- Laravel Lumen 11.0
-- MySQL 8.0
-- MongoDB 7.0
-- Docker & Docker Compose
+- **Backend**: Laravel Lumen 11.x
+- **PHP**: ^8.2
+- **Banco de Dados Principal**: MySQL
+- **Sistema de Logs**: MongoDB
+- **Documentação**: Swagger/OpenAPI 3.0 (zircote/swagger-php)
+- **Containerização**: Docker e Docker Compose
 
 ## 📋 Pré-requisitos
 
-- Docker Desktop instalado
-- Git
-- Portas livres: 8000 (API), 3306 (MySQL), 27017 (MongoDB)
+- **PHP** >= 8.2
+- **Composer** >= 2.0
+- **Docker** e **Docker Compose** (recomendado)
+- **MySQL/MariaDB** >= 8.0
+- **MongoDB** >= 4.0
+- **Git**
 
-## ⚙️ Instalação
+## ⚡ Instalação Rápida
 
-1. Clone o repositório:
+### Opção 1: Docker (Recomendado)
+
 ```bash
-git clone https://github.com/Jardelsr/task-management-system.git
+# 1. Clone o repositório
+git clone https://github.com/seu-usuario/task-management-system.git
 cd task-management-system
+
+# 2. Configure o ambiente
+cp .env.example .env
+
+# 3. Inicie os serviços com Docker
+docker-compose up -d
+
+# 4. Execute as migrações
+docker-compose exec app php artisan migrate
+
+# 5. Acesse a API
+curl http://localhost:8000/api/v1/
 ```
 
-2. Copie o arquivo de ambiente:
+### Opção 2: Instalação Manual
+
 ```bash
-copy .env.example .env
+# 1. Clone o repositório
+git clone https://github.com/seu-usuario/task-management-system.git
+cd task-management-system
+
+# 2. Instale as dependências
+composer install
+
+# 3. Configure o ambiente
+cp .env.example .env
+# Edite o arquivo .env com suas configurações
+
+# 4. Execute as migrações
+php artisan migrate
+
+# 5. Inicie o servidor
+php -S localhost:8000 -t public
 ```
 
-3. Construa e inicie os containers Docker:
-```bash
-cd docker
-docker-compose up -d --build
-```
+## ⚙️ Configuração
 
-4. Instale as dependências PHP:
-```bash
-docker-compose exec app composer install
-```
+### Configuração do Banco de Dados
 
-5. Ajuste as permissões:
-```bash
-docker-compose exec app chmod -R 775 storage
-docker-compose exec app chmod -R 775 bootstrap/cache
-```
-
-## 🔧 Configuração do Ambiente
-
-O arquivo `.env` contém todas as configurações necessárias:
+Edite o arquivo `.env`:
 
 ```env
-# Application
-APP_NAME=Task Management System
-APP_ENV=local
-APP_DEBUG=true
-APP_URL=http://localhost:8000
-
-# MySQL Database
+# MySQL/MariaDB - Banco principal
 DB_CONNECTION=mysql
-DB_HOST=mysql
+DB_HOST=127.0.0.1
 DB_PORT=3306
 DB_DATABASE=task_management
 DB_USERNAME=root
-DB_PASSWORD=secret
+DB_PASSWORD=password
 
-# MongoDB
-MONGO_HOST=mongodb
-MONGO_PORT=27017
-MONGO_DATABASE=task_logs
+# MongoDB - Sistema de logs
+MONGODB_CONNECTION=mongodb
+MONGODB_HOST=127.0.0.1
+MONGODB_PORT=27017
+MONGODB_DATABASE=task_logs
+MONGODB_USERNAME=
+MONGODB_PASSWORD=
+
+# Configurações da aplicação
+APP_ENV=local
+APP_DEBUG=true
+APP_KEY=
+APP_TIMEZONE=America/Sao_Paulo
 ```
 
-## 🚦 Comandos Docker
+### Configuração do Docker
+
+O projeto inclui configuração Docker completa:
+
+```yaml
+# docker-compose.yml
+version: '3.8'
+services:
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+  mysql:
+    image: mysql:8.0
+  mongodb:
+    image: mongo:5.0
+```
+
+## 🎯 Uso da API
+
+### Endpoints Principais
+
+#### 📋 Tarefas - Operações Básicas
+| Método | Endpoint | Descrição |
+|--------|----------|-----------|
+| `GET` | `/api/v1/tasks` | Lista todas as tarefas |
+| `POST` | `/api/v1/tasks` | Cria uma nova tarefa |
+| `GET` | `/api/v1/tasks/{id}` | Obtém tarefa específica |
+| `PUT` | `/api/v1/tasks/{id}` | Atualiza tarefa completa |
+| `PATCH` | `/api/v1/tasks/{id}` | Atualização parcial |
+| `DELETE` | `/api/v1/tasks/{id}` | Exclusão lógica (soft delete) |
+
+#### 🔄 Tarefas - Operações Especiais
+| Método | Endpoint | Descrição |
+|--------|----------|-----------|
+| `POST` | `/api/v1/tasks/{id}/restore` | Restaura tarefa excluída |
+| `DELETE` | `/api/v1/tasks/{id}/force` | Exclusão permanente |
+| `POST` | `/api/v1/tasks/{id}/complete` | Marca como concluída |
+| `POST` | `/api/v1/tasks/{id}/start` | Marca como em progresso |
+| `POST` | `/api/v1/tasks/{id}/cancel` | Marca como cancelada |
+| `POST` | `/api/v1/tasks/{id}/assign` | Atribui a um usuário |
+| `DELETE` | `/api/v1/tasks/{id}/assign` | Remove atribuição |
+| `POST` | `/api/v1/tasks/{id}/duplicate` | Duplica tarefa |
+
+#### 📊 Tarefas - Coleções e Estatísticas
+| Método | Endpoint | Descrição |
+|--------|----------|-----------|
+| `GET` | `/api/v1/tasks/stats` | Estatísticas das tarefas |
+| `GET` | `/api/v1/tasks/summary` | Resumo das tarefas |
+| `GET` | `/api/v1/tasks/trashed` | Lista tarefas excluídas |
+| `GET` | `/api/v1/tasks/overdue` | Lista tarefas vencidas |
+| `GET` | `/api/v1/tasks/completed` | Lista tarefas concluídas |
+| `GET` | `/api/v1/tasks/export` | Exporta tarefas |
+| `POST` | `/api/v1/tasks/bulk` | Cria múltiplas tarefas |
+| `PUT` | `/api/v1/tasks/bulk` | Atualiza múltiplas tarefas |
+| `DELETE` | `/api/v1/tasks/bulk` | Exclui múltiplas tarefas |
+
+#### 📝 Registros e Auditoria
+| Método | Endpoint | Descrição |
+|--------|----------|-----------|
+| `GET` | `/api/v1/logs` | Lista logs do sistema |
+| `GET` | `/api/v1/logs/{id}` | Obtém log específico |
+| `GET` | `/api/v1/logs/stats` | Estatísticas dos logs |
+| `GET` | `/api/v1/logs/recent` | Logs recentes |
+| `GET` | `/api/v1/logs/export` | Exporta logs |
+| `GET` | `/api/v1/logs/tasks/{id}` | Logs de uma tarefa |
+| `GET` | `/api/v1/logs/actions/{action}` | Logs por ação |
+| `GET` | `/api/v1/logs/users/{userId}` | Logs por usuário |
+| `GET` | `/api/v1/logs/date-range` | Logs por período |
+| `DELETE` | `/api/v1/logs/cleanup` | Limpeza de logs antigos |
+
+#### 🔍 Sistema e Documentação
+| Método | Endpoint | Descrição |
+|--------|----------|-----------|
+| `GET` | `/` | Visão geral da API |
+| `GET` | `/api/v1/info` | Informações da API |
+| `GET` | `/api/v1/health` | Status de saúde |
+| `GET` | `/health` | Verificação geral de saúde do sistema |
+| `GET` | `/health/database/{connection}` | Teste de conexão BD |
+| `GET` | `/api/v1/docs` | Documentação interativa |
+| `GET` | `/api/v1/openapi.json` | Especificação OpenAPI |
+
+### Exemplos de Uso
+
+#### Criar uma Nova Tarefa
 
 ```bash
-# Iniciar containers
-docker-compose up -d
-
-# Parar containers
-docker-compose down
-
-# Visualizar logs
-docker-compose logs -f
-
-# Acessar o shell do container
-docker-compose exec app bash
-
-# Reconstruir containers
-docker-compose up -d --build
+curl -X POST http://localhost:8000/api/v1/tasks \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Implementar autenticação",
+    "description": "Adicionar sistema de login e registro",
+    "status": "pending",
+    "due_date": "2025-12-31",
+    "assigned_to": 1
+  }'
 ```
 
-## 🔍 Verificando a Instalação
-
-1. Verifique se os containers estão em execução:
-```bash
-docker-compose ps
-```
-
-2. Teste o endpoint da API:
-```bash
-curl http://localhost:8000
-```
-
-3. Verifique as conexões com os bancos de dados:
-```bash
-# MySQL
-docker-compose exec mysql mysql -u root -psecret -e "SELECT 1"
-
-# MongoDB
-docker-compose exec mongodb mongosh --eval "db.runCommand({ ping: 1 })"
-```
-
-## 🐛 Solução de Problemas
-
-Problemas comuns e soluções:
-
-1. **Conflito de portas:**:
-   - Verifique se as portas 8000, 3306 ou 27017 estão em uso
-   - Modifique os mapeamentos de portas no docker-compose.yml se necessário
-
-2. **Problemas de permissão:**:
-   - Execute os comandos `chmod` como mostrado nos passos de instalação
-   - Certifique-se de que os volumes montados tenham a propriedade correta
-
-3. **Falhas ao iniciar containers:**:
-   - Verifique os logs com `docker-compose logs`
-   - Confirme as variáveis de ambiente no arquivo `.env`
-
-## � Guia de Filtros da API
-
-### Visão Geral
-
-O Sistema de Gerenciamento de Tarefas implementa uma estrutura abrangente de tratamento de erros que fornece respostas de erro consistentes e informativas em toda a API. Este sistema inclui exceções customizadas, respostas de erro centralizadas e logging adequado.
-
-### Classes de Exceções Customizadas
-
-#### TaskNotFoundException
-- **Propósito**: Lançada quando uma tarefa solicitada não pode ser encontrada
-- **Status HTTP**: 404
-- **Uso**: `throw new TaskNotFoundException($taskId);`
-- **Formato de Resposta**:
+**Resposta:**
 ```json
 {
-  "error": "Task not found",
-  "message": "Task with ID 123 not found",
-  "task_id": 123,
-  "code": "TASK_NOT_FOUND"
-}
-```
-
-#### TaskValidationException
-- **Propósito**: Lançada quando a validação de dados da tarefa falha
-- **Status HTTP**: 422
-- **Uso**: `throw new TaskValidationException($errors, $field);`
-- **Formato de Resposta**:
-```json
-{
-  "error": "Validation failed",
-  "message": "Task validation failed",
-  "errors": {"title": ["O campo título é obrigatório"]},
-  "field": "title",
-  "code": "VALIDATION_FAILED"
-}
-```
-
-#### DatabaseException
-- **Propósito**: Lançada quando operações de banco de dados falham
-- **Status HTTP**: 500
-- **Uso**: `throw new DatabaseException($message, $operation, $context);`
-- **Formato de Resposta**:
-```json
-{
-  "error": "Database operation failed",
-  "message": "Falha ao conectar com o banco de dados",
-  "operation": "select",
-  "code": "DATABASE_ERROR"
-}
-```
-
-#### TaskOperationException
-- **Propósito**: Lançada quando operações de tarefa falham
-- **Status HTTP**: 500
-- **Uso**: `throw new TaskOperationException($message, $operation, $taskId);`
-- **Formato de Resposta**:
-```json
-{
-  "error": "Task operation failed",
-  "message": "Falha ao atualizar status da tarefa",
-  "operation": "update",
-  "task_id": 123,
-  "code": "TASK_OPERATION_FAILED"
-}
-```
-
-#### LoggingException
-- **Propósito**: Lançada quando operações de logging falham
-- **Status HTTP**: 500
-- **Uso**: `throw new LoggingException($message, $operation, $context);`
-
-### Helper de Respostas de Erro (ErrorResponseTrait)
-
-O `ErrorResponseTrait` fornece métodos consistentes para gerar respostas de erro:
-
-#### Métodos Disponíveis
-
-- `errorResponse($error, $message, $statusCode, $details, $code)` - Resposta de erro genérica
-- `validationErrorResponse($errors, $message)` - Resposta de erro de validação
-- `notFoundResponse($resource, $id)` - Resposta de recurso não encontrado
-- `databaseErrorResponse($operation, $message)` - Resposta de erro de banco de dados
-- `unauthorizedResponse($message)` - Resposta 401 Não Autorizado
-- `forbiddenResponse($message)` - Resposta 403 Proibido
-- `serverErrorResponse($message, $details)` - Resposta 500 Erro do Servidor
-- `successResponse($data, $message, $statusCode)` - Resposta de sucesso
-
-#### Exemplo de Uso
-
-```php
-// Em um controller
-public function someMethod()
-{
-    try {
-        // Alguma operação
-    } catch (TaskNotFoundException $e) {
-        throw $e; // Deixa o manipulador de exceções lidar com isso
-    } catch (\Exception $e) {
-        return $this->serverErrorResponse('Operação falhou');
-    }
-}
-```
-
-### Manipulador de Exceções (app/Exceptions/Handler.php)
-
-O manipulador de exceções aprimorado fornece:
-
-1. **Mapeamento Automático de Exceções**: Mapeia exceções customizadas para respostas HTTP apropriadas
-2. **Formato de Resposta Consistente**: Todos os erros seguem a mesma estrutura JSON
-3. **Integração de Logging**: Registra automaticamente exceções com contexto
-4. **Suporte ao Modo Debug**: Mostra informações detalhadas de erro quando `APP_DEBUG=true`
-5. **Segurança**: Oculta informações sensíveis no modo produção
-
-#### Formato de Resposta
-
-Todas as respostas de erro seguem esta estrutura:
-
-```json
-{
-  "success": false,
-  "error": "Tipo de erro",
-  "message": "Mensagem de erro legível",
-  "timestamp": "2025-09-20T10:30:00.000000Z",
-  "details": {
-    // Detalhes adicionais específicos do erro
-  },
-  "code": "CODIGO_ERRO",
-  "debug": {
-    // Informações de debug (apenas no modo debug)
-    "file": "/path/to/file.php",
-    "line": 42
+  "success": true,
+  "message": "Task created successfully",
+  "data": {
+    "id": 1,
+    "title": "Implementar autenticação",
+    "description": "Adicionar sistema de login e registro",
+    "status": "pending",
+    "due_date": "2025-12-31T00:00:00.000000Z",
+    "assigned_to": 1,
+    "created_at": "2025-09-22T10:30:00.000000Z",
+    "updated_at": "2025-09-22T10:30:00.000000Z"
   }
 }
 ```
 
-### Configuração
+#### Listar Tarefas com Filtros
 
-O tratamento de erros é configurado em `config/errors.php`:
+```bash
+# Tarefas pendentes do usuário 1, ordenadas por prazo
+curl "http://localhost:8000/api/v1/tasks?status=pending&assigned_to=1&sort_by=due_date&sort_order=asc"
 
-- **Mensagens Padrão**: Mensagens de erro predefinidas
-- **Códigos de Erro**: Códigos de erro padronizados
-- **Logging**: Configuração de comportamento de logging
-- **Debug**: Configurações do modo debug
-- **Rate Limiting**: Limitação de taxa de resposta de erro
-
-### Melhores Práticas
-
-#### 1. Use Exceções Específicas
-```php
-// Bom
-throw new TaskNotFoundException($id);
-
-// Evite
-throw new \Exception('Task not found');
+# Tarefas vencidas com paginação
+curl "http://localhost:8000/api/v1/tasks?overdue=true&page=1&limit=10"
 ```
 
-#### 2. Forneça Contexto
-```php
-// Bom
-throw new DatabaseException(
-    'Falha ao atualizar tarefa',
-    'update',
-    ['task_id' => $id, 'fields' => $data]
-);
+#### Atualizar Status da Tarefa
 
-// Menos útil
-throw new DatabaseException('Falha na atualização');
+```bash
+curl -X PATCH http://localhost:8000/api/v1/tasks/1 \
+  -H "Content-Type: application/json" \
+  -d '{"status": "in_progress"}'
 ```
 
-#### 3. Deixe o Manipulador de Exceções Lidar com as Respostas
-```php
-// Bom
-public function show($id)
-{
-    $task = $this->repository->findById($id);
-    
-    if (!$task) {
-        throw new TaskNotFoundException($id);
-    }
-    
-    return $this->successResponse($task);
-}
+## 🔍 Sistema de Filtros
 
-// Evite criação manual de resposta
-public function show($id)
-{
-    try {
-        $task = $this->repository->findById($id);
-        
-        if (!$task) {
-            return response()->json(['error' => 'Não encontrado'], 404);
-        }
-        
-        return response()->json($task);
-    } catch (\Exception $e) {
-        return response()->json(['error' => 'Falhou'], 500);
-    }
-}
-```
-
-#### 4. Use Métodos Helper de Resposta
-```php
-// Bom
-return $this->successResponse($data, 'Tarefa criada com sucesso', 201);
-
-// Menos consistente
-return response()->json(['success' => true, 'data' => $data], 201);
-```
-
-### Testando o Tratamento de Erros
-
-#### Exemplos de Casos de Teste
-
-```php
-/** @test */
-public function it_throws_task_not_found_exception_when_task_does_not_exist()
-{
-    $this->expectException(TaskNotFoundException::class);
-    $this->controller->show(999);
-}
-
-/** @test */
-public function it_returns_proper_error_response_for_not_found_task()
-{
-    $response = $this->get('/tasks/999');
-    
-    $response->assertStatus(404)
-             ->assertJson([
-                 'success' => false,
-                 'error' => 'Task not found',
-                 'code' => 'TASK_NOT_FOUND'
-             ]);
-}
-```
-
-### Monitoramento e Logging
-
-O sistema de tratamento de erros registra automaticamente:
-- Exceções de banco de dados com contexto da operação
-- Falhas de operação de tarefa com IDs de tarefa
-- Erros de validação (quando configurado)
-- Todas as exceções não tratadas
-
-Os logs são estruturados para monitoramento fácil:
-```
-[2025-09-20 10:30:00] local.ERROR: Database operation failed
-{
-  "operation": "update",
-  "context": {"task_id": 123},
-  "message": "Connection timeout",
-  "file": "/app/TaskController.php",
-  "line": 45
-}
-```
-
-Este sistema abrangente de tratamento de erros garante respostas de erro consistentes, informativas e seguras em toda a API do Sistema de Gerenciamento de Tarefas.
-
-
-
-### Endpoint: GET /tasks
-
-O método de filtros aprimorados de index oferece recursos abrangentes de filtragem, ordenação e paginação para listagem de tarefas.
-
-### Parâmetros de Query Disponíveis
-
-#### **Parâmetros de Filtragem**
+### Parâmetros de Filtragem para Tarefas
 
 | Parâmetro | Tipo | Descrição | Exemplo |
 |-----------|------|-----------|---------|
-| `status` | string | Filtrar por status da tarefa | `?status=pending` |
-| `assigned_to` | integer | Filtrar por ID do usuário responsável | `?assigned_to=123` |
-| `created_by` | integer | Filtrar por ID do criador | `?created_by=456` |
-| `overdue` | boolean | Filtrar apenas tarefas vencidas | `?overdue=true` |
-| `with_due_date` | boolean | Filtrar tarefas com prazo definido | `?with_due_date=true` |
+| `status` | string | Status da tarefa | `?status=pending` |
+| `assigned_to` | integer | ID do usuário responsável | `?assigned_to=1` |
+| `created_by` | integer | ID do criador | `?created_by=2` |
+| `overdue` | boolean | Apenas tarefas vencidas | `?overdue=true` |
+| `with_due_date` | boolean | Apenas com prazo definido | `?with_due_date=true` |
 
-#### **Parâmetros de Ordenação**
+### Parâmetros de Filtragem para Logs
 
-| Parâmetro | Tipo | Padrão | Descrição | Valores Válidos |
-|-----------|------|--------|-----------|-----------------|
-| `sort_by` | string | `created_at` | Campo para ordenação | `created_at`, `updated_at`, `due_date`, `title`, `status` |
-| `sort_order` | string | `desc` | Direção da ordenação | `asc`, `desc` |
+| Parâmetro | Tipo | Descrição | Exemplo |
+|-----------|------|-----------|---------|
+| `action` | string | Filtrar por tipo de ação | `?action=created` |
+| `task_id` | integer | Filtrar por ID da tarefa | `?task_id=1` |
+| `user_id` | integer | Filtrar por ID do usuário | `?user_id=1` |
+| `level` | string | Filtrar por nível do log | `?level=info` |
+| `source` | string | Filtrar por origem do log | `?source=api` |
+| `start_date` | datetime | Data de início (formato: Y-m-d H:i:s) | `?start_date=2025-01-01 00:00:00` |
+| `end_date` | datetime | Data de fim (formato: Y-m-d H:i:s) | `?end_date=2025-12-31 23:59:59` |
 
-#### **Parâmetros de Paginação**
+### Valores Válidos para Filtros
 
-| Parâmetro | Tipo | Padrão | Descrição | Restrições |
-|-----------|------|--------|-----------|------------|
-| `limit` | integer | `50` | Resultados por página | Mín: 1, Máx: 1000 |
-| `page` | integer | `1` | Número da página | Mín: 1 |
-
-### Valores de Status Válidos
-
+#### Status de Tarefas
 - `pending` - Pendente
 - `in_progress` - Em andamento  
 - `completed` - Concluída
 - `cancelled` - Cancelada
 
-### Exemplos de Requisições
+#### Ações registradas no Log
+- `created` - Criação
+- `updated` - Atualização
+- `deleted` - Exclusão suave
+- `restored` - Restauração
+- `soft_delete` - Exclusão suave
+- `force_delete` - Exclusão permanente
+- `bulk_update` - Atualização em lote
+- `status_change` - Mudança de status
+- `assignment_change` - Mudança de atribuição
+- `metadata_update` - Atualização de metadados
 
-#### Filtragem Básica por Status
+### Parâmetros de Ordenação
+
+| Parâmetro | Valores | Padrão | Descrição |
+|-----------|---------|--------|-----------|
+| `sort_by` | **Tarefas:** `created_at`, `updated_at`, `due_date`, `title`, `status` | `created_at` | Campo para ordenação |
+|           | **Logs:** `created_at`, `action`, `task_id`, `user_id` |  |  |
+| `sort_order` | `asc`, `desc` | `desc` | Direção da ordenação |
+
+### Parâmetros de Paginação
+
+| Parâmetro | Tipo | Padrão | Limite | Descrição |
+|-----------|------|--------|--------|-----------|
+| `page` | integer | `1` | ≥ 1 | Página atual |
+| `limit` | integer | `50` | 1-1000 | Itens por página |
+
+### Exemplos de Consultas Avançadas
+
+#### Filtros para Tarefas
 ```bash
-GET /tasks?status=pending
+# Tarefas pendentes com prazo vencido
+curl "http://localhost:8000/api/v1/tasks?status=pending&overdue=true"
+
+# Tarefas do usuário 1, ordenadas por prazo
+curl "http://localhost:8000/api/v1/tasks?assigned_to=1&sort_by=due_date&sort_order=asc"
+
+# Tarefas concluídas com paginação
+curl "http://localhost:8000/api/v1/tasks?status=completed&page=2&limit=25"
 ```
 
-#### Filtragem Avançada com Ordenação
+#### Filtros para Logs
 ```bash
-GET /tasks?status=in_progress&assigned_to=123&sort_by=due_date&sort_order=asc
+# Logs de criação das últimas 24 horas
+curl "http://localhost:8000/api/v1/logs?action=created&start_date=2025-09-21 00:00:00&end_date=2025-09-22 00:00:00"
+
+# Logs de uma tarefa específica
+curl "http://localhost:8000/api/v1/logs?task_id=1&sort_by=created_at&sort_order=desc"
+
+# Logs de erro por usuário
+curl "http://localhost:8000/api/v1/logs?level=error&user_id=1&limit=10"
 ```
 
-#### Paginação com Filtros
+## 🗂 Status de Tarefas
+
+- `pending` - Pendente
+- `in_progress` - Em andamento
+- `completed` - Concluída
+- `cancelled` - Cancelada
+
+## 📊 Monitoramento e Logs
+
+### Sistema de Auditoria
+
+Todas as operações são registradas no MongoDB:
+
 ```bash
-GET /tasks?status=pending&page=2&limit=25
+# Ver logs de uma tarefa específica
+curl "http://localhost:8000/api/v1/logs?entity_type=task&entity_id=1"
+
+# Filtrar logs por ação
+curl "http://localhost:8000/api/v1/logs?action=created&limit=20"
 ```
 
-#### Obter Tarefas Vencidas
+### Health Check
+
 ```bash
-GET /tasks?overdue=true&sort_by=due_date&sort_order=asc
+# Verificar status da API
+curl http://localhost:8000/health
+
+# Testar conexões de banco
+curl http://localhost:8000/health/database/mysql
+curl http://localhost:8000/health/database/mongodb
 ```
 
-#### Filtragem Complexa
-```bash
-GET /tasks?created_by=456&with_due_date=true&sort_by=created_at&limit=100
-```
+## 🛡️ Tratamento de Erros
 
-### Formato de Resposta
+### Códigos de Status HTTP usados
+
+- `200` - Sucesso
+- `201` - Criado com sucesso
+- `400` - Requisição inválida
+- `404` - Recurso não encontrado
+- `422` - Erro de validação
+- `429` - Muitas requisições (Rate Limit)
+- `500` - Erro interno do servidor
+
+### Formato de Erro Padrão
 
 ```json
 {
-    "success": true,
-    "data": [
-        {
-            "id": 1,
-            "title": "Título da Tarefa",
-            "description": "Descrição da Tarefa",
-            "status": "pending",
-            "created_by": 123,
-            "assigned_to": 456,
-            "due_date": "2025-09-25T15:30:00.000000Z",
-            "completed_at": null,
-            "created_at": "2025-09-20T10:00:00.000000Z",
-            "updated_at": "2025-09-20T10:00:00.000000Z"
-        }
-    ],
-    "pagination": {
-        "current_page": 1,
-        "per_page": 50,
-        "total": 150,
-        "total_pages": 3,
-        "has_next_page": true,
-        "has_prev_page": false
-    },
-    "filters": {
-        "status": "pending",
-        "assigned_to": null,
-        "created_by": null,
-        "overdue": null,
-        "with_due_date": null,
-        "sort_by": "created_at",
-        "sort_order": "desc"
-    }
+  "error": "Validation failed",
+  "message": "Os dados fornecidos são inválidos",
+  "errors": {
+    "title": ["O campo título é obrigatório"],
+    "status": ["Status deve ser: pending, in_progress, completed, cancelled"]
+  },
+  "code": "VALIDATION_FAILED"
 }
 ```
 
-### Respostas de Erro
+## 📚 Documentação da API
 
-#### Status Inválido
-```json
-{
-    "error": "Parâmetro status inválido",
-    "valid_statuses": ["pending", "in_progress", "completed", "cancelled"]
-}
+### Swagger UI
+
+Acesse a documentação interativa:
+
+- **Local**: http://localhost:8000/api/v1/docs
+- **Especificação OpenAPI**: http://localhost:8000/api/v1/openapi.json
+
+### Endpoints de Documentação
+
+```bash
+# Informações da API
+curl http://localhost:8000/api/v1/info
+
+# Especificação OpenAPI completa
+curl http://localhost:8000/api/v1/openapi.json
 ```
 
-#### Campo de Ordenação Inválido
-```json
-{
-    "error": "Parâmetro sort_by inválido",
-    "valid_sort_fields": ["created_at", "updated_at", "due_date", "title", "status"]
-}
+## 🧪 Testes
+
+### Executar Testes
+
+```bash
+# Testes unitários
+./vendor/bin/phpunit
+
+# Testes com Docker
+docker-compose exec app ./vendor/bin/phpunit
+
+# Testes específicos
+./vendor/bin/phpunit --filter TaskTest
 ```
 
-#### Ordem de Classificação Inválida
-```json
-{
-    "error": "Parâmetro sort_order inválido",
-    "valid_sort_orders": ["asc", "desc"]
-}
+### Validação da API
+
+```bash
+# Executar suite de testes de validação
+php test_api_validation_formatting.php
+
+# Testar tratamento de erros
+php test_comprehensive_error_handling.php
 ```
 
-### Considerações de Performance
+## 🔧 Desenvolvimento
 
-- Toda a filtragem é realizada no nível do banco de dados para performance otimizada
-- Limites de paginação são aplicados (máximo de 1000 por requisição)
-- Índices de banco de dados estão em vigor para campos comumente filtrados (status, assigned_to, created_by, due_date)
-- Usa padrão repository para manter o controller limpo e testável
+### Estrutura do Projeto
 
-## �📚 Documentação
+```
+├── app/                          # Código da aplicação
+│   ├── Console/                  # Comandos Artisan personalizados
+│   ├── Exceptions/               # Exceções customizadas
+│   │   ├── TaskNotFoundException.php
+│   │   ├── TaskValidationException.php
+│   │   └── DatabaseException.php
+│   ├── Http/                     # Camada HTTP
+│   │   ├── Controllers/          # Controllers da API
+│   │   │   ├── TaskController.php
+│   │   │   ├── LogController.php
+│   │   │   └── ApiDocumentationController.php
+│   │   ├── Middleware/           # Middlewares customizados
+│   │   ├── Requests/             # Validação de requisições
+│   │   │   ├── CreateTaskRequest.php
+│   │   │   ├── UpdateTaskRequest.php
+│   │   │   └── ValidationHelper.php
+│   │   └── Responses/            # Formatadores de resposta
+│   ├── Models/                   # Models Eloquent & MongoDB
+│   │   ├── Task.php             # Model principal de tarefas
+│   │   └── Log.php              # Model de logs (MongoDB)
+│   ├── OpenApi/                  # Anotações OpenAPI/Swagger
+│   ├── Providers/                # Service Providers
+│   ├── Repositories/             # Repositories para abstração de dados
+│   ├── Services/                 # Serviços de negócio
+│   │   ├── ValidationMessageService.php
+│   │   └── LoggingService.php
+│   └── Traits/                   # Traits reutilizáveis
+├── bootstrap/                    # Inicialização da aplicação
+├── config/                       # Arquivos de configuração
+│   ├── api.php                  # Configurações da API
+│   ├── database.php             # Configurações de banco de dados
+│   ├── mongo.php                # Configurações MongoDB
+│   ├── logging.php              # Configurações de logging
+│   └── validation_messages.php  # Mensagens de validação
+├── database/                     # Database related files
+│   └── migrations/              # Migrações do banco MySQL
+├── docs/                         # Documentação adicional
+│   ├── api-filtering-guide.md
+│   ├── soft-delete-implementation.md
+│   ├── enhanced-response-formatting.md
+│   └── restful-routes-configuration.md
+├── public/                       # Arquivos públicos
+│   ├── index.php                # Entry point da aplicação
+│   ├── swagger-ui/              # Interface Swagger UI
+│   └── .htaccess               # Configurações Apache
+├── resources/                    # Recursos da aplicação
+│   ├── lang/                    # Arquivos de idioma
+│   └── views/                   # Views (se houver)
+├── routes/                       # Definições de rotas
+│   └── web.php                  # Rotas da aplicação
+├── storage/                      # Arquivos de storage
+│   ├── cache/                   # Cache da aplicação
+│   ├── framework/               # Framework files
+│   ├── logs/                    # Log files
+│   └── test_outputs/            # Outputs de testes
+├── tests/                        # Testes automatizados
+├── vendor/                       # Dependências Composer
+├── .env                         # Variáveis de ambiente
+├── .env.example                 # Exemplo de variáveis de ambiente
+├── composer.json                # Dependências e autoload
+├── composer.lock               # Lock das versões
+├── artisan                     # CLI do Laravel
+├── docker-compose.yml          # Configuração Docker
+└── README-PT.md                # Este arquivo
+```
 
-A documentação da API estará disponível em:
-- http://localhost:8000/api/documentation (em breve)
+### Arquivos Principais
 
-## 📝 License
+#### **Configuração**
+- `composer.json` - Dependências do projeto
+- `.env` - Variáveis de ambiente
+- `artisan` - CLI do Laravel/Lumen
+- `docker-compose.yml` - Orquestração de containers
 
-Este projeto está licenciado sob a Licença MIT.
+#### **Controllers Principais**
+- `TaskController.php` - CRUD completo de tarefas + operações especiais
+- `LogController.php` - Gerenciamento de logs e auditoria  
+- `ApiDocumentationController.php` - Documentação OpenAPI/Swagger
+
+#### **Models**
+- `Task.php` - Model principal com soft delete e validações
+- `Log.php` - Model para MongoDB com logs de auditoria
+
+#### **Validação**
+- `CreateTaskRequest.php` - Validação para criação de tarefas
+- `UpdateTaskRequest.php` - Validação para atualização
+- `ValidationHelper.php` - Helpers de validação
+
+#### **Documentação**
+- `/docs/` - Documentação técnica detalhada
+- OpenAPI specs (arquivos `openapi-*.json`)
+- Swagger UI integrado em `/public/swagger-ui/`
+
+#### **Testes**
+- Múltiplos arquivos de teste para validação de API
+- Testes de integração com Docker
+- Testes de segurança e validação
+
+### Comandos Úteis para Navegação
+
+```bash
+# Estrutura da aplicação
+tree app/ -I "*.php"
+
+# Ver controllers disponíveis
+ls app/Http/Controllers/
+
+# Ver configurações
+ls config/
+
+# Ver documentação
+ls docs/
+
+# Ver testes
+ls test_*.php
+```
+
+## 📄 Licença
+
+Este projeto está licenciado sob a [Licença MIT](LICENSE).
+
+## 🔄 Histórico de Versões
+
+### v1.0.0
+- API RESTful completa para gerenciamento de tarefas
+- Sistema de soft delete e restauração
+- Logging abrangente com MongoDB
+- Documentação OpenAPI/Swagger
+- Sistema avançado de filtros e paginação
+- Tratamento robusto de erros
+- Rate limiting e validação
+
+---
