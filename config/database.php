@@ -34,6 +34,17 @@ return [
                 'appName' => 'Task Management System',
             ],
         ],
+        'mongodb_testing' => [
+            'driver' => 'mongodb',
+            'host' => env('MONGO_HOST', 'localhost'),
+            'port' => env('MONGO_PORT', 27017),
+            'database' => 'task_management_test',
+            'username' => env('MONGO_USERNAME'),
+            'password' => env('MONGO_PASSWORD'),
+            'options' => [
+                'appName' => 'Task Management System Tests',
+            ],
+        ],
     ],
 
     'migrations' => 'migrations',

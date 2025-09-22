@@ -134,8 +134,8 @@ docker-compose logs app
 #### 📝 Registros e Auditoria
 | Método | Endpoint | Descrição |
 |--------|----------|-----------|
-| `GET` | `/api/v1/logs` | Lista logs do sistema |
-| `GET` | `/api/v1/logs/{id}` | Obtém log específico |
+| `GET` | `/api/v1/logs` | Lista os últimos 30 logs do sistema (padrão). Use `?id=<log_id>` para obter log específico |
+| `GET` | `/api/v1/logs/{id}` | Obtém log específico por ID na URL |
 | `GET` | `/api/v1/logs/stats` | Estatísticas dos logs |
 | `GET` | `/api/v1/logs/recent` | Logs recentes |
 | `GET` | `/api/v1/logs/export` | Exporta logs |
@@ -283,6 +283,15 @@ curl "http://localhost:8000/api/v1/tasks?status=completed&page=2&limit=25"
 
 #### Filtros para Logs
 ```bash
+# Listar os últimos 30 logs (padrão)
+curl "http://localhost:8000/api/v1/logs"
+
+# Obter log específico por ID (query parameter)
+curl "http://localhost:8000/api/v1/logs?id=647b5c2e123456789abcdef0"
+
+# Obter log específico por ID (URL path)
+curl "http://localhost:8000/api/v1/logs/647b5c2e123456789abcdef0"
+
 # Logs de criação das últimas 24 horas
 curl "http://localhost:8000/api/v1/logs?action=created&start_date=2025-09-21 00:00:00&end_date=2025-09-22 00:00:00"
 
@@ -291,6 +300,9 @@ curl "http://localhost:8000/api/v1/logs?task_id=1&sort_by=created_at&sort_order=
 
 # Logs de erro por usuário
 curl "http://localhost:8000/api/v1/logs?level=error&user_id=1&limit=10"
+
+# Personalizar quantidade de logs listados (exemplo: 50)
+curl "http://localhost:8000/api/v1/logs?limit=50&page=1"
 ```
 
 ## 🗂 Status de Tarefas
@@ -358,30 +370,90 @@ curl http://localhost:8000/api/v1/info
 curl http://localhost:8000/api/v1/openapi.json
 ```
 
-## 🧪 Testes
+## 🧪 Testes Automatizados
 
-### Executar Testes
+Este projeto possui uma infraestrutura completa de testes automatizados usando **PHPUnit 10.5**, organizada em múltiplas suítes para garantir qualidade e confiabilidade do código.
+
+### 📋 Estrutura de Testes
+
+```
+tests/
+├── Unit/                     # Testes unitários isolados
+│   ├── SimpleMathTest.php   # Testes básicos de funcionalidade
+│   ├── ValidationTest.php   # Sistema de validação
+│   └── LogServiceTest.php   # Serviços de logging
+├── Integration/              # Testes de integração
+│   ├── TaskRepositoryTest.php
+│   └── DatabaseTest.php
+├── Feature/                  # Testes de funcionalidade end-to-end
+│   ├── TaskApiTest.php
+│   └── ApiEndpointsTest.php
+└── TestCase.php             # Classe base com helpers
+```
+
+### ⚡ Scripts de Execução
+
+#### Script Principal (Recomendado)
+```bash
+# Executar todos os testes
+php run-tests.php
+
+# Executar suíte específica
+php run-tests.php unit          # Testes unitários
+php run-tests.php integration   # Testes de integração  
+php run-tests.php feature      # Testes de funcionalidade
+
+# Executar teste específico
+php run-tests.php SimpleMathTest
+php run-tests.php ValidationTest
+
+# Ver ajuda
+php run-tests.php --help
+```
+
+#### Scripts Alternativos
+```bash
+# PowerShell
+./run-tests.ps1
+
+# Batch (Windows)
+run-tests.bat
+
+# Bash (Linux/Mac)  
+./run-tests.sh
+```
+
+### 🎯 PHPUnit Direto
 
 ```bash
-# Testes unitários
+# Todos os testes
 ./vendor/bin/phpunit
 
-# Testes com Docker
-docker-compose exec app ./vendor/bin/phpunit
+# Testes por suíte
+./vendor/bin/phpunit --testsuite=unit
+./vendor/bin/phpunit --testsuite=integration
+./vendor/bin/phpunit --testsuite=feature
 
-# Testes específicos
-./vendor/bin/phpunit --filter TaskTest
+# Teste específico
+./vendor/bin/phpunit tests/Unit/SimpleMathTest.php
+./vendor/bin/phpunit tests/Unit/ValidationTest.php
+
+# Com cores e verbosidade
+./vendor/bin/phpunit --colors=always --verbose
 ```
 
-### Validação da API
+### 📊 Resultados dos Testes
 
-```bash
-# Executar suite de testes de validação
-php test_api_validation_formatting.php
+#### ✅ Testes Funcionais
+- **SimpleMathTest**: 10/10 testes ✅ (29 asserções)
+- **ValidationTest**: 11/11 testes ✅ (67 asserções)
+- **Infraestrutura**: Totalmente operacional ✅
 
-# Testar tratamento de erros
-php test_comprehensive_error_handling.php
-```
+#### ⚙️ Configuração
+- **Framework**: PHPUnit 10.5.55
+- **PHP**: 8.4.2+ compatível
+- **Configuração**: `phpunit.xml` otimizado
+- **Ambiente**: Isolado com limpeza automática
 
 ## 🔧 Desenvolvimento
 
@@ -443,7 +515,22 @@ php test_comprehensive_error_handling.php
 │   ├── framework/               # Framework files
 │   ├── logs/                    # Log files
 │   └── test_outputs/            # Outputs de testes
-├── tests/                        # Testes automatizados
+├── tests/                        # Testes automatizados (PHPUnit 10.5)
+│   ├── Unit/                    # Testes unitários isolados
+│   │   ├── SimpleMathTest.php   # ✅ Testes básicos (10/10)
+│   │   ├── ValidationTest.php   # ✅ Sistema validação (11/11)
+│   │   ├── LogServiceTest.php   # Serviços de logging
+│   │   └── InputSanitizationServiceTest.php
+│   ├── Integration/             # Testes de integração
+│   │   ├── TaskRepositoryTest.php
+│   │   ├── DatabaseConnectionTest.php
+│   │   └── ApiIntegrationTest.php
+│   ├── Feature/                 # Testes end-to-end
+│   │   ├── TaskApiTest.php
+│   │   ├── LogEndpointsTest.php
+│   │   └── ApiWorkflowTest.php
+│   ├── TestCase.php            # Classe base com helpers
+│   └── phpunit.xml             # Configuração PHPUnit
 ├── vendor/                       # Dependências Composer
 ├── .env                         # Variáveis de ambiente
 ├── .env.example                 # Exemplo de variáveis de ambiente
@@ -465,6 +552,14 @@ php test_comprehensive_error_handling.php
 - `artisan` - CLI do Laravel/Lumen
 - `docker/docker-compose.yml` - Orquestração de containers
 - `docker/Dockerfile` - Imagem da aplicação
+
+#### **Scripts de Teste**
+- `run-tests.php` - Script principal de execução de testes (recomendado)
+- `run-tests.ps1` - Script PowerShell para Windows
+- `run-tests.bat` - Script Batch para Windows
+- `run-tests.sh` - Script Bash para Linux/Mac
+- `phpunit.xml` - Configuração PHPUnit otimizada
+- `TestCase.php` - Classe base com helpers de teste
 
 #### **Controllers Principais**
 - `TaskController.php` - CRUD completo de tarefas + operações especiais
@@ -497,11 +592,13 @@ php test_comprehensive_error_handling.php
 - OpenAPI specs (arquivos `openapi-*.json`)
 - Swagger UI integrado em `/public/swagger-ui/`
 
-#### **Testes**
-- Múltiplos arquivos de teste para validação de API (40+ arquivos)
-- Testes de integração com Docker
-- Testes de segurança e validação
-- Testes de injeção SQL e sanitização de dados
+#### **Testes Automatizados**
+- Infraestrutura completa de testes com PHPUnit 10.5
+- Estrutura organizada: Unit/Integration/Feature
+- Scripts de execução multiplataforma (PHP, PowerShell, Batch, Bash)
+- Testes funcionais validados com 100% de aprovação
+- Sistema de helpers e mocks para isolamento de testes
+- Configuração otimizada com limpeza automática de ambiente
 
 ## 📄 Licença
 

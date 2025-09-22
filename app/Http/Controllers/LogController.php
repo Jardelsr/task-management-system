@@ -86,7 +86,7 @@ class LogController extends Controller
      *         in="query",
      *         description="Number of logs per page (1-1000)",
      *         required=false,
-     *         @OA\Schema(type="integer", minimum=1, maximum=1000, default=50)
+     *         @OA\Schema(type="integer", minimum=1, maximum=1000, default=30)
      *     ),
      *     @OA\Parameter(
      *         name="page",
@@ -190,7 +190,7 @@ class LogController extends Controller
             if (isset($sanitizedData['limit'])) {
                 $limit = $sanitizedData['limit'];
                 if (!is_numeric($limit) || $limit < 1) {
-                    $sanitizedData['limit'] = 50; // Default fallback
+                    $sanitizedData['limit'] = 30; // Default fallback
                 } else {
                     $sanitizedData['limit'] = min(max((int) $limit, 1), 1000); // Enforce bounds
                 }
@@ -312,7 +312,7 @@ class LogController extends Controller
             // Validate task ID format
             $validatedId = ValidationHelper::validateTaskId($taskId);
             
-            $limit = min(max((int) $request->query('limit', 50), 1), 1000);
+            $limit = min(max((int) $request->query('limit', 30), 1), 1000);
 
             // Response formatting options
             $responseOptions = [
@@ -494,7 +494,7 @@ class LogController extends Controller
     public function byAction(Request $request, string $action): JsonResponse
     {
         try {
-            $limit = min(max((int) $request->query('limit', 50), 1), 1000);
+            $limit = min(max((int) $request->query('limit', 30), 1), 1000);
             
             $logs = $this->logService->getLogsByAction($action, $limit);
             
@@ -542,7 +542,7 @@ class LogController extends Controller
     {
         try {
             $validatedUserId = ValidationHelper::validateTaskId($userId); // Reusing validation logic
-            $limit = min(max((int) $request->query('limit', 50), 1), 1000);
+            $limit = min(max((int) $request->query('limit', 30), 1), 1000);
             
             $logs = $this->logService->getLogsByUser($validatedUserId, $limit);
             
@@ -758,7 +758,7 @@ class LogController extends Controller
     {
         try {
             $validatedId = ValidationHelper::validateTaskId($taskId);
-            $limit = min(max((int) $request->query('limit', 50), 1), 1000);
+            $limit = min(max((int) $request->query('limit', 30), 1), 1000);
             
             $logs = $this->logService->getTaskDeletionLogs($validatedId, $limit);
             

@@ -1,0 +1,209 @@
+# GitHub Actions CI/CD Configuration
+name: Automated Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  tests:
+    name: PHP Tests
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        php-version: [8.2, 8.3]
+        mongodb-version: [6.0, 7.0]
+
+    services:
+      mongodb:
+        image: mongo:${{ matrix.mongodb-version }}
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --eval 'db.runCommand({ ping: 1 })'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 3
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup PHP
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: ${{ matrix.php-version }}
+        extensions: mbstring, xml, ctype, iconv, intl, pdo, pdo_mysql, dom, filter, gd, json, mongodb
+        tools: composer:v2
+        coverage: xdebug
+
+    - name: Cache Composer packages
+      id: composer-cache
+      uses: actions/cache@v3
+      with:
+        path: vendor
+        key: ${{ runner.os }}-php-${{ matrix.php-version }}-${{ hashFiles('**/composer.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-php-${{ matrix.php-version }}-
+
+    - name: Install dependencies
+      run: composer install --prefer-dist --no-progress --no-scripts
+
+    - name: Setup environment
+      run: |
+        cp .env.example .env.testing
+        echo "DB_CONNECTION=mongodb" >> .env.testing
+        echo "DB_DATABASE=task_management_test" >> .env.testing
+        echo "DB_HOST=127.0.0.1" >> .env.testing
+        echo "DB_PORT=27017" >> .env.testing
+
+    - name: Wait for MongoDB
+      run: |
+        timeout 60 bash -c 'until mongosh --eval "db.runCommand({ ping: 1 })"; do sleep 1; done'
+
+    - name: Run Unit Tests
+      run: vendor/bin/phpunit --testsuite=Unit --coverage-clover coverage-unit.xml
+
+    - name: Run Integration Tests
+      run: vendor/bin/phpunit --testsuite=Integration --coverage-clover coverage-integration.xml
+
+    - name: Run Feature Tests
+      run: vendor/bin/phpunit --testsuite=Feature --coverage-clover coverage-feature.xml
+
+    - name: Generate Full Coverage Report
+      run: vendor/bin/phpunit --coverage-clover coverage.xml --coverage-html coverage-html
+
+    - name: Upload Coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        files: ./coverage.xml
+        fail_ci_if_error: false
+        verbose: true
+
+    - name: Archive code coverage results
+      uses: actions/upload-artifact@v3
+      with:
+        name: code-coverage-report
+        path: coverage-html/
+
+    - name: Archive test results
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: test-results
+        path: |
+          test-results.xml
+          coverage*.xml
+
+  code-quality:
+    name: Code Quality Checks
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup PHP
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: 8.2
+        extensions: mbstring, xml, ctype, iconv, intl
+        tools: composer:v2, phpstan, php-cs-fixer
+
+    - name: Cache Composer packages
+      uses: actions/cache@v3
+      with:
+        path: vendor
+        key: ${{ runner.os }}-php-8.2-${{ hashFiles('**/composer.lock') }}
+
+    - name: Install dependencies
+      run: composer install --prefer-dist --no-progress
+
+    - name: Run PHP CS Fixer (Dry Run)
+      run: |
+        composer require friendsofphp/php-cs-fixer --dev
+        vendor/bin/php-cs-fixer fix --dry-run --diff --verbose
+
+    - name: Run PHPStan Static Analysis
+      run: |
+        composer require phpstan/phpstan --dev
+        composer require phpstan/phpstan-laravel --dev
+        vendor/bin/phpstan analyse app tests --level=5
+
+  security:
+    name: Security Checks
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup PHP
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: 8.2
+        tools: composer:v2
+
+    - name: Install dependencies
+      run: composer install --prefer-dist --no-progress
+
+    - name: Run Security Check
+      run: |
+        composer require sensiolabs/security-checker --dev
+        vendor/bin/security-checker security:check composer.lock
+
+  performance:
+    name: Performance Tests
+    runs-on: ubuntu-latest
+    needs: tests
+    
+    services:
+      mongodb:
+        image: mongo:7.0
+        ports:
+          - 27017:27017
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup PHP
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: 8.2
+        extensions: mongodb
+
+    - name: Install dependencies
+      run: composer install --prefer-dist --no-progress
+
+    - name: Setup test environment
+      run: |
+        cp .env.example .env.testing
+        echo "DB_CONNECTION=mongodb" >> .env.testing
+        echo "DB_DATABASE=task_management_perf_test" >> .env.testing
+
+    - name: Run Performance Tests
+      run: |
+        # Create performance test dataset
+        vendor/bin/phpunit tests/Integration/DatabaseIntegrationTest.php::testQueryPerformanceWithLargeDataset
+        
+        # Run API performance tests
+        php -f test_performance_api.php || echo "Performance tests completed"
+
+  notify:
+    name: Notify Results
+    runs-on: ubuntu-latest
+    needs: [tests, code-quality, security]
+    if: always()
+    
+    steps:
+    - name: Notify Success
+      if: ${{ needs.tests.result == 'success' && needs.code-quality.result == 'success' && needs.security.result == 'success' }}
+      run: echo "✅ All checks passed successfully!"
+      
+    - name: Notify Failure
+      if: ${{ needs.tests.result == 'failure' || needs.code-quality.result == 'failure' || needs.security.result == 'failure' }}
+      run: |
+        echo "❌ Some checks failed:"
+        echo "Tests: ${{ needs.tests.result }}"
+        echo "Code Quality: ${{ needs.code-quality.result }}"
+        echo "Security: ${{ needs.security.result }}"

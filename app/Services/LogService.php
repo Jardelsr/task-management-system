@@ -131,8 +131,8 @@ class LogService implements LogServiceInterface
             
             $validatedParams = ValidationHelper::validateLogParameters($request);
             
-            // Handle pagination
-            $limit = $validatedParams['limit'] ?? config('api.responses.default_per_page', 50);
+            // Handle pagination - Default 30 logs for log endpoints
+            $limit = $validatedParams['limit'] ?? 30;
             $page = $request->query('page', 1);
             $offset = ($page - 1) * $limit;
             
@@ -179,8 +179,8 @@ class LogService implements LogServiceInterface
     public function getLogsWithAdvancedFilters(array $validatedParams, Request $request): array
     {
         try {
-            // Handle pagination
-            $limit = $validatedParams['limit'] ?? config('api.responses.default_per_page', 50);
+            // Handle pagination - Default 30 logs for log endpoints
+            $limit = $validatedParams['limit'] ?? 30;
             $page = $request->query('page', 1);
             $offset = ($page - 1) * $limit;
 
@@ -1339,8 +1339,8 @@ class LogService implements LogServiceInterface
         array $responseOptions = []
     ): array {
         try {
-            // Extract filtering parameters
-            $limit = $validatedParams['limit'] ?? config('api.responses.default_per_page', 50);
+            // Extract filtering parameters - Default 30 logs for log endpoints
+            $limit = $validatedParams['limit'] ?? 30;
             $page = $request->query('page', 1);
             $offset = ($page - 1) * $limit;
 
