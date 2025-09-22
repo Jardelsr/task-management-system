@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Response;
 use Carbon\Carbon;
 use OpenApi\Generator;
 use Illuminate\Support\Facades\Log;
@@ -15,7 +16,7 @@ use Illuminate\Support\Facades\DB;
  * and interactive documentation endpoints with robust error handling.
  * 
  * @OA\Info(
- *     title="Task Management System API",
+ *     title="Task Management System API",Loading API Documentation...
  *     version="1.0.0",
  *     description="A comprehensive RESTful API for managing tasks with soft delete capabilities, comprehensive logging, and advanced filtering features. Built with Lumen framework for high performance and scalability.",
  *     @OA\License(
@@ -47,6 +48,121 @@ use Illuminate\Support\Facades\DB;
  * 
  * @OA\ExternalDocumentation(
  *     description="API Documentation Wiki"
+ * )
+ * 
+ * @OA\Schema(
+ *     schema="Task",
+ *     type="object",
+ *     title="Task",
+ *     description="Task object with all properties",
+ *     @OA\Property(property="id", type="integer", description="Unique task identifier", example=1),
+ *     @OA\Property(property="title", type="string", description="Task title", example="Complete project documentation"),
+ *     @OA\Property(property="description", type="string", description="Detailed task description", example="Write comprehensive API documentation for the task management system"),
+ *     @OA\Property(property="status", type="string", enum={"pending", "in_progress", "completed", "cancelled"}, description="Task status", example="pending"),
+ *     @OA\Property(property="priority", type="string", enum={"low", "medium", "high", "urgent"}, description="Task priority", example="high"),
+ *     @OA\Property(property="assigned_to", type="integer", nullable=true, description="ID of assigned user", example=123),
+ *     @OA\Property(property="created_by", type="integer", nullable=true, description="ID of user who created the task", example=456),
+ *     @OA\Property(property="due_date", type="string", format="date-time", nullable=true, description="Task due date", example="2023-12-31T23:59:59Z"),
+ *     @OA\Property(property="completed_at", type="string", format="date-time", nullable=true, description="Task completion timestamp", example="2023-06-15T14:30:00Z"),
+ *     @OA\Property(property="created_at", type="string", format="date-time", description="Creation timestamp", example="2023-06-01T10:00:00Z"),
+ *     @OA\Property(property="updated_at", type="string", format="date-time", description="Last update timestamp", example="2023-06-15T14:30:00Z"),
+ *     @OA\Property(property="deleted_at", type="string", format="date-time", nullable=true, description="Soft deletion timestamp", example=null)
+ * )
+ * 
+ * @OA\Schema(
+ *     schema="LogEntry",
+ *     type="object",
+ *     title="Log Entry",
+ *     description="System audit log entry",
+ *     @OA\Property(property="_id", type="string", description="MongoDB ObjectId", example="647b5c2e123456789abcdef0"),
+ *     @OA\Property(property="action", type="string", description="Action performed", example="created"),
+ *     @OA\Property(property="task_id", type="integer", nullable=true, description="Associated task ID", example=1),
+ *     @OA\Property(property="user_id", type="integer", nullable=true, description="User who performed action", example=123),
+ *     @OA\Property(property="details", type="object", description="Action details and context"),
+ *     @OA\Property(property="timestamp", type="string", format="date-time", description="When action occurred", example="2023-06-15T14:30:00Z"),
+ *     @OA\Property(property="ip_address", type="string", nullable=true, description="User IP address", example="192.168.1.100"),
+ *     @OA\Property(property="user_agent", type="string", nullable=true, description="User agent string"),
+ *     @OA\Property(property="request_id", type="string", nullable=true, description="Request tracking ID"),
+ *     @OA\Property(property="execution_time", type="number", nullable=true, description="Operation execution time in milliseconds", example=150.5)
+ * )
+ * 
+ * @OA\Schema(
+ *     schema="Pagination",
+ *     type="object",
+ *     title="Pagination",
+ *     description="Pagination metadata",
+ *     @OA\Property(property="current_page", type="integer", description="Current page number", example=1),
+ *     @OA\Property(property="per_page", type="integer", description="Items per page", example=50),
+ *     @OA\Property(property="total", type="integer", description="Total number of items", example=250),
+ *     @OA\Property(property="total_pages", type="integer", description="Total number of pages", example=5),
+ *     @OA\Property(property="has_next_page", type="boolean", description="Has next page", example=true),
+ *     @OA\Property(property="has_previous_page", type="boolean", description="Has previous page", example=false),
+ *     @OA\Property(property="next_page", type="integer", nullable=true, description="Next page number", example=2),
+ *     @OA\Property(property="previous_page", type="integer", nullable=true, description="Previous page number", example=null)
+ * )
+ * 
+ * @OA\Schema(
+ *     schema="ErrorResponse",
+ *     type="object",
+ *     title="Error Response",
+ *     description="Standard error response format",
+ *     @OA\Property(property="success", type="boolean", example=false),
+ *     @OA\Property(property="error", type="string", description="Error type", example="validation_error"),
+ *     @OA\Property(property="message", type="string", description="Error message", example="The given data was invalid"),
+ *     @OA\Property(property="timestamp", type="string", format="date-time", description="Error timestamp"),
+ *     @OA\Property(property="details", type="object", description="Additional error details")
+ * )
+ * 
+ * @OA\Schema(
+ *     schema="ValidationErrorResponse", 
+ *     type="object",
+ *     title="Validation Error Response",
+ *     description="Validation error response with field details",
+ *     @OA\Property(property="success", type="boolean", example=false),
+ *     @OA\Property(property="error", type="string", example="validation_error"),
+ *     @OA\Property(property="message", type="string", example="The given data was invalid"),
+ *     @OA\Property(property="timestamp", type="string", format="date-time"),
+ *     @OA\Property(
+ *         property="details",
+ *         type="object",
+ *         @OA\Property(
+ *             property="errors",
+ *             type="object",
+ *             description="Field-specific validation errors",
+ *             @OA\AdditionalProperties(
+ *                 type="array",
+ *                 @OA\Items(type="string")
+ *             )
+ *         ),
+ *         @OA\Property(property="invalid_fields", type="array", @OA\Items(type="string"))
+ *     )
+ * )
+ *
+ * @OA\Schema(
+ *     schema="CreateTaskRequest",
+ *     type="object",
+ *     title="Create Task Request",
+ *     description="Request body for creating a new task",
+ *     required={"title"},
+ *     @OA\Property(property="title", type="string", description="Task title (required)", example="Complete project documentation", minLength=1, maxLength=255),
+ *     @OA\Property(property="description", type="string", description="Task description (optional)", example="Write comprehensive API documentation"),
+ *     @OA\Property(property="status", type="string", enum={"pending", "in_progress", "completed", "cancelled"}, description="Initial task status", example="pending", default="pending"),
+ *     @OA\Property(property="priority", type="string", enum={"low", "medium", "high", "urgent"}, description="Task priority", example="medium", default="medium"),
+ *     @OA\Property(property="assigned_to", type="integer", nullable=true, description="ID of user to assign task to", example=123),
+ *     @OA\Property(property="due_date", type="string", format="date-time", nullable=true, description="Task due date (ISO 8601)", example="2023-12-31T23:59:59Z")
+ * )
+ * 
+ * @OA\Schema(
+ *     schema="UpdateTaskRequest",
+ *     type="object", 
+ *     title="Update Task Request",
+ *     description="Request body for updating an existing task",
+ *     @OA\Property(property="title", type="string", description="Task title", example="Updated task title", minLength=1, maxLength=255),
+ *     @OA\Property(property="description", type="string", description="Task description", example="Updated task description"),
+ *     @OA\Property(property="status", type="string", enum={"pending", "in_progress", "completed", "cancelled"}, description="Task status", example="in_progress"),
+ *     @OA\Property(property="priority", type="string", enum={"low", "medium", "high", "urgent"}, description="Task priority", example="high"),
+ *     @OA\Property(property="assigned_to", type="integer", nullable=true, description="ID of assigned user", example=456),
+ *     @OA\Property(property="due_date", type="string", format="date-time", nullable=true, description="Task due date", example="2023-12-31T23:59:59Z")
  * )
  */
 class ApiDocumentationController extends Controller
@@ -238,8 +354,8 @@ class ApiDocumentationController extends Controller
     public function openapi(): JsonResponse
     {
         try {
-            // Load the enhanced OpenAPI specification from file
-            $specFile = base_path('openapi-enhanced.json');
+            // Load the unified master OpenAPI specification
+            $specFile = base_path('openapi-master-unified.json');
             
             if (file_exists($specFile)) {
                 $spec = json_decode(file_get_contents($specFile), true);
@@ -265,6 +381,36 @@ class ApiDocumentationController extends Controller
                     'Content-Type' => 'application/json',
                     'X-API-Version' => 'v1.0',
                     'Cache-Control' => 'public, max-age=3600'
+                ]);
+            }
+            
+            if (file_exists($specFile)) {
+                $spec = json_decode(file_get_contents($specFile), true);
+                
+                if ($spec === null) {
+                    throw new \Exception('Invalid JSON in OpenAPI specification file');
+                }
+                
+                // Update server URLs to match current environment
+                $currentUrl = request()->getSchemeAndHttpHost() . '/api/v1';
+                $environment = app()->environment();
+                
+                // Update the first server (current environment) to match the actual request
+                $spec['servers'][0]['url'] = $currentUrl;
+                $spec['servers'][0]['description'] = ucfirst($environment) . ' Server (Current)';
+                
+                // Add environment-specific metadata
+                $spec['info']['x-environment'] = $environment;
+                $spec['info']['x-server-time'] = Carbon::now()->toISOString();
+                $spec['info']['x-lumen-version'] = app()->version();
+                
+                return response()->json($spec, 200, [
+                    'Content-Type' => 'application/json',
+                    'X-API-Version' => 'v1.0',
+                    'Cache-Control' => 'public, max-age=3600',
+                    'Access-Control-Allow-Origin' => '*',
+                    'Access-Control-Allow-Methods' => 'GET, OPTIONS',
+                    'Access-Control-Allow-Headers' => 'Content-Type, Authorization'
                 ]);
             }
             
@@ -325,7 +471,10 @@ class ApiDocumentationController extends Controller
             
             return response()->json($spec, 200, [
                 'Content-Type' => 'application/json',
-                'X-API-Version' => 'v1.0'
+                'X-API-Version' => 'v1.0',
+                'Access-Control-Allow-Origin' => '*',
+                'Access-Control-Allow-Methods' => 'GET, OPTIONS',
+                'Access-Control-Allow-Headers' => 'Content-Type, Authorization'
             ]);
             
         } catch (\Exception $e) {
@@ -338,6 +487,48 @@ class ApiDocumentationController extends Controller
                 'error' => 'Failed to generate OpenAPI specification',
                 'message' => $e->getMessage()
             ], 500);
+        }
+    }
+
+    /**
+     * Display Swagger UI documentation interface
+     *
+     * @return Response
+     */
+    public function swaggerUi(): Response
+    {
+        try {
+            $data = [
+                'title' => 'Task Management System API Documentation',
+                'lumenVersion' => app()->version(),
+                'environment' => app()->environment(),
+                'baseUrl' => request()->getSchemeAndHttpHost(),
+                'specUrl' => request()->getSchemeAndHttpHost() . '/api/v1/openapi.json'
+            ];
+
+            return response(view('swagger-working', $data), 200, [
+                'Content-Type' => 'text/html; charset=UTF-8',
+                'X-API-Version' => 'v1.0'
+            ]);
+            
+        } catch (\Exception $e) {
+            Log::error('Swagger UI generation failed', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            
+            // Fallback to basic HTML
+            $html = '<!DOCTYPE html>
+<html>
+<head><title>API Documentation Error</title></head>
+<body>
+    <h1>API Documentation Temporarily Unavailable</h1>
+    <p>Error: ' . htmlspecialchars($e->getMessage()) . '</p>
+    <p><a href="/api/v1/openapi.json">View Raw OpenAPI Specification</a></p>
+</body>
+</html>';
+
+            return response($html, 500, ['Content-Type' => 'text/html']);
         }
     }
 

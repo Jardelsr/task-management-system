@@ -54,6 +54,7 @@ $router->group(['middleware' => ['throttle:api']], function () use ($router) {
             'timestamp' => \Carbon\Carbon::now()->toISOString(),
             'documentation' => [
                 'main' => url('/api/v1/docs'),
+                'ui' => url('/api/v1/docs/ui'),
                 'info' => url('/api/v1/info'),
                 'openapi' => url('/api/v1/openapi.json')
             ],
@@ -76,6 +77,9 @@ $router->group(['middleware' => ['throttle:api']], function () use ($router) {
             ]
         ]);
     });
+    
+    // Direct documentation UI route for easy access
+    $router->get('/docs', 'ApiDocumentationController@swaggerUi');
 });
 
 /*
@@ -101,6 +105,7 @@ $router->group([
         
         // API documentation and specs
         $router->get('/docs', 'ApiDocumentationController@index');
+        $router->get('/docs/ui', 'ApiDocumentationController@swaggerUi');
         $router->get('/openapi', 'ApiDocumentationController@openapi');
         $router->get('/openapi.json', 'ApiDocumentationController@openapi'); // Alternative for tools that expect .json
         

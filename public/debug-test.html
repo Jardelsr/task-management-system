@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Swagger UI Test</title>
+    <script>
+        console.log('Test script loaded');
+        window.onload = function() {
+            console.log('Window loaded');
+            fetch('http://localhost:8000/swagger-ui/swagger-ui-bundle.js')
+                .then(response => {
+                    console.log('Bundle request status:', response.status);
+                    return response.text();
+                })
+                .then(text => {
+                    console.log('Bundle size:', text.length);
+                    console.log('Bundle contains SwaggerUIBundle:', text.includes('SwaggerUIBundle'));
+                })
+                .catch(error => console.error('Error loading bundle:', error));
+                
+            fetch('http://localhost:8000/api/v1/openapi.json')
+                .then(response => response.json())
+                .then(json => {
+                    console.log('OpenAPI loaded, paths count:', Object.keys(json.paths).length);
+                    console.log('Paths:', Object.keys(json.paths));
+                })
+                .catch(error => console.error('Error loading OpenAPI:', error));
+        };
+    </script>
+</head>
+<body>
+    <h1>Debug Test</h1>
+    <p>Check browser console for debug information</p>
+</body>
+</html>

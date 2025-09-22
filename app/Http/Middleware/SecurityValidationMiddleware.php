@@ -301,20 +301,42 @@ class SecurityValidationMiddleware
             $response->header('Referrer-Policy', 'strict-origin-when-cross-origin');
             
             // Comprehensive Content Security Policy
-            $csp = implode('; ', [
-                "default-src 'self'",
-                "script-src 'self'",
-                "style-src 'self' 'unsafe-inline'",
-                "img-src 'self' data:",
-                "font-src 'self'",
-                "connect-src 'self'",
-                "media-src 'self'",
-                "object-src 'none'",
-                "child-src 'self'",
-                "frame-ancestors 'none'",
-                "base-uri 'self'",
-                "form-action 'self'"
-            ]);
+            // More permissive CSP for documentation routes
+            $isDocsRoute = request()->is('docs*') || request()->is('api/*/docs*') || request()->is('swagger*');
+            
+            if ($isDocsRoute) {
+                // Relaxed CSP for documentation pages to allow Swagger UI
+                $csp = implode('; ', [
+                    "default-src 'self'",
+                    "script-src 'self' 'unsafe-inline' https://unpkg.com",
+                    "style-src 'self' 'unsafe-inline' https://unpkg.com",
+                    "img-src 'self' data:",
+                    "font-src 'self'",
+                    "connect-src 'self' https://unpkg.com",
+                    "media-src 'self'",
+                    "object-src 'none'",
+                    "child-src 'self'",
+                    "frame-ancestors 'none'",
+                    "base-uri 'self'",
+                    "form-action 'self'"
+                ]);
+            } else {
+                // Strict CSP for all other routes
+                $csp = implode('; ', [
+                    "default-src 'self'",
+                    "script-src 'self'",
+                    "style-src 'self' 'unsafe-inline'",
+                    "img-src 'self' data:",
+                    "font-src 'self'",
+                    "connect-src 'self'",
+                    "media-src 'self'",
+                    "object-src 'none'",
+                    "child-src 'self'",
+                    "frame-ancestors 'none'",
+                    "base-uri 'self'",
+                    "form-action 'self'"
+                ]);
+            }
             $response->header('Content-Security-Policy', $csp);
             
             // HTTP Strict Transport Security (HSTS) - 1 year with includeSubDomains

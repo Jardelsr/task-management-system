@@ -34,6 +34,112 @@ class LogController extends Controller
     /**
      * Display a listing of logs with comprehensive filtering
      *
+     * @OA\Get(
+     *     path="/logs",
+     *     tags={"Logs"},
+     *     summary="Get logs with optional filtering or retrieve specific log by ID",
+     *     description="Retrieve logs with comprehensive filtering options or get a specific log by ID. Supports filtering by action, task_id, user_id, date ranges, and pagination. Use ?id=<log_id> to retrieve a specific log entry.",
+     *     @OA\Parameter(
+     *         name="id",
+     *         in="query",
+     *         description="Retrieve specific log by MongoDB ObjectId (24-character hexadecimal string)",
+     *         required=false,
+     *         @OA\Schema(type="string", pattern="^[0-9a-fA-F]{24}$", example="647b5c2e123456789abcdef0")
+     *     ),
+     *     @OA\Parameter(
+     *         name="action",
+     *         in="query",
+     *         description="Filter by log action type",
+     *         required=false,
+     *         @OA\Schema(type="string", enum={"created", "updated", "deleted", "restored", "force_deleted", "assigned", "completed", "status_changed"})
+     *     ),
+     *     @OA\Parameter(
+     *         name="task_id",
+     *         in="query",
+     *         description="Filter by associated task ID",
+     *         required=false,
+     *         @OA\Schema(type="integer", minimum=1)
+     *     ),
+     *     @OA\Parameter(
+     *         name="user_id",
+     *         in="query",
+     *         description="Filter by user who performed the action",
+     *         required=false,
+     *         @OA\Schema(type="integer", minimum=1)
+     *     ),
+     *     @OA\Parameter(
+     *         name="date_from",
+     *         in="query",
+     *         description="Filter logs from this date (ISO 8601 format)",
+     *         required=false,
+     *         @OA\Schema(type="string", format="date-time", example="2023-01-01T00:00:00Z")
+     *     ),
+     *     @OA\Parameter(
+     *         name="date_to",
+     *         in="query",
+     *         description="Filter logs up to this date (ISO 8601 format)",
+     *         required=false,
+     *         @OA\Schema(type="string", format="date-time", example="2023-12-31T23:59:59Z")
+     *     ),
+     *     @OA\Parameter(
+     *         name="limit",
+     *         in="query",
+     *         description="Number of logs per page (1-1000)",
+     *         required=false,
+     *         @OA\Schema(type="integer", minimum=1, maximum=1000, default=50)
+     *     ),
+     *     @OA\Parameter(
+     *         name="page",
+     *         in="query",
+     *         description="Page number for pagination",
+     *         required=false,
+     *         @OA\Schema(type="integer", minimum=1, default=1)
+     *     ),
+     *     @OA\Parameter(
+     *         name="include_technical",
+     *         in="query",
+     *         description="Include technical metadata in response (for specific log retrieval only)",
+     *         required=false,
+     *         @OA\Schema(type="boolean", default=false)
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Logs retrieved successfully",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=true),
+     *             @OA\Property(property="timestamp", type="string", format="date-time"),
+     *             @OA\Property(property="message", type="string", example="Logs retrieved successfully"),
+     *             @OA\Property(
+     *                 property="data",
+     *                 type="array",
+     *                 @OA\Items(ref="#/components/schemas/LogEntry")
+     *             ),
+     *             @OA\Property(
+     *                 property="meta",
+     *                 type="object",
+     *                 @OA\Property(property="pagination", ref="#/components/schemas/Pagination"),
+     *                 @OA\Property(property="applied_filters", type="object"),
+     *                 @OA\Property(property="total_count", type="integer")
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=404,
+     *         description="Log not found (when requesting specific log by ID)",
+     *         @OA\JsonContent(ref="#/components/schemas/ErrorResponse")
+     *     ),
+     *     @OA\Response(
+     *         response=422,
+     *         description="Validation error",
+     *         @OA\JsonContent(ref="#/components/schemas/ValidationErrorResponse")
+     *     ),
+     *     @OA\Response(
+     *         response=500,
+     *         description="Server error",
+     *         @OA\JsonContent(ref="#/components/schemas/ErrorResponse")
+     *     )
+     * )
+     *
      * @param Request $request
      * @return JsonResponse
      */

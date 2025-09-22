@@ -21,6 +21,11 @@ $app = new Laravel\Lumen\Application(
 $app->withFacades();
 $app->withEloquent();
 
+// Enable views
+$app->instance('path.config', app()->basePath() . DIRECTORY_SEPARATOR . 'config');
+$app->instance('path.storage', app()->basePath() . DIRECTORY_SEPARATOR . 'storage');
+$app->configure('view');
+
 // Enable cache functionality for rate limiting
 $app->register(Illuminate\Cache\CacheServiceProvider::class);
 
@@ -80,6 +85,7 @@ $app->routeMiddleware([
 */
 
 // Register services in the correct order for Lumen 11
+$app->register(Illuminate\View\ViewServiceProvider::class);
 $app->register(MongoDB\Laravel\MongoDBServiceProvider::class);
 $app->register(App\Providers\MongoDBConnectionServiceProvider::class);
 $app->register(App\Providers\LoggingServiceProvider::class);
