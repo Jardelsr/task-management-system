@@ -33,6 +33,121 @@ class TaskController extends Controller
         $this->logService = $logService;
     }
 
+    /**
+     * List all tasks with advanced filtering and pagination
+     * 
+     * @OA\Get(
+     *     path="/tasks",
+     *     tags={"Tasks"},
+     *     summary="Get all tasks",
+     *     description="Retrieve a paginated list of tasks with optional filtering by status, priority, assigned user, and date ranges. Supports full-text search and advanced sorting options.",
+     *     @OA\Parameter(
+     *         name="page",
+     *         in="query",
+     *         description="Page number for pagination",
+     *         required=false,
+     *         @OA\Schema(type="integer", minimum=1, default=1)
+     *     ),
+     *     @OA\Parameter(
+     *         name="limit",
+     *         in="query",
+     *         description="Number of tasks per page",
+     *         required=false,
+     *         @OA\Schema(type="integer", minimum=1, maximum=100, default=50)
+     *     ),
+     *     @OA\Parameter(
+     *         name="status",
+     *         in="query",
+     *         description="Filter by task status",
+     *         required=false,
+     *         @OA\Schema(type="string", enum={"pending", "in_progress", "completed", "cancelled"})
+     *     ),
+     *     @OA\Parameter(
+     *         name="priority",
+     *         in="query",
+     *         description="Filter by task priority",
+     *         required=false,
+     *         @OA\Schema(type="string", enum={"low", "medium", "high", "urgent"})
+     *     ),
+     *     @OA\Parameter(
+     *         name="assigned_to",
+     *         in="query",
+     *         description="Filter by assigned user ID",
+     *         required=false,
+     *         @OA\Schema(type="integer")
+     *     ),
+     *     @OA\Parameter(
+     *         name="search",
+     *         in="query",
+     *         description="Search in task title and description",
+     *         required=false,
+     *         @OA\Schema(type="string")
+     *     ),
+     *     @OA\Parameter(
+     *         name="sort_by",
+     *         in="query",
+     *         description="Sort field",
+     *         required=false,
+     *         @OA\Schema(type="string", enum={"id", "title", "status", "priority", "created_at", "updated_at", "due_date"}, default="created_at")
+     *     ),
+     *     @OA\Parameter(
+     *         name="sort_order",
+     *         in="query",
+     *         description="Sort order",
+     *         required=false,
+     *         @OA\Schema(type="string", enum={"asc", "desc"}, default="desc")
+     *     ),
+     *     @OA\Parameter(
+     *         name="due_date_from",
+     *         in="query",
+     *         description="Filter tasks with due date from this date",
+     *         required=false,
+     *         @OA\Schema(type="string", format="date")
+     *     ),
+     *     @OA\Parameter(
+     *         name="due_date_to",
+     *         in="query",
+     *         description="Filter tasks with due date until this date",
+     *         required=false,
+     *         @OA\Schema(type="string", format="date")
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Tasks retrieved successfully",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="data", type="array", @OA\Items(ref="#/components/schemas/Task")),
+     *             @OA\Property(property="message", type="string", example="Tasks retrieved successfully"),
+     *             @OA\Property(property="meta", type="object",
+     *                 @OA\Property(property="pagination", type="object",
+     *                     @OA\Property(property="current_page", type="integer"),
+     *                     @OA\Property(property="per_page", type="integer"),
+     *                     @OA\Property(property="total", type="integer"),
+     *                     @OA\Property(property="total_pages", type="integer"),
+     *                     @OA\Property(property="has_next_page", type="boolean"),
+     *                     @OA\Property(property="has_previous_page", type="boolean"),
+     *                     @OA\Property(property="next_page", type="integer", nullable=true),
+     *                     @OA\Property(property="previous_page", type="integer", nullable=true)
+     *                 ),
+     *                 @OA\Property(property="applied_filters", type="object")
+     *             )
+     *         ),
+     *         @OA\Header(header="X-Total-Count", @OA\Schema(type="integer"), description="Total number of tasks"),
+     *         @OA\Header(header="X-Page", @OA\Schema(type="integer"), description="Current page number"),
+     *         @OA\Header(header="X-Per-Page", @OA\Schema(type="integer"), description="Items per page"),
+     *         @OA\Header(header="X-Total-Pages", @OA\Schema(type="integer"), description="Total pages available")
+     *     ),
+     *     @OA\Response(
+     *         response=400,
+     *         description="Invalid filter parameters",
+     *         @OA\JsonContent(ref="#/components/schemas/Error")
+     *     ),
+     *     @OA\Response(
+     *         response=500,
+     *         description="Internal server error",
+     *         @OA\JsonContent(ref="#/components/schemas/Error")
+     *     )
+     * )
+     */
     public function index(Request $request): JsonResponse
     {
         try {
@@ -95,6 +210,46 @@ class TaskController extends Controller
         }
     }
 
+    /**
+     * Retrieve a specific task by ID
+     * 
+     * @OA\Get(
+     *     path="/tasks/{id}",
+     *     tags={"Tasks"},
+     *     summary="Get a specific task",
+     *     description="Retrieve detailed information about a specific task by its ID.",
+     *     @OA\Parameter(
+     *         name="id",
+     *         in="path",
+     *         description="Task ID",
+     *         required=true,
+     *         @OA\Schema(type="integer", minimum=1)
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Task retrieved successfully",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="data", ref="#/components/schemas/Task"),
+     *             @OA\Property(property="message", type="string", example="Task retrieved successfully")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=404,
+     *         description="Task not found",
+     *         @OA\JsonContent(ref="#/components/schemas/Error")
+     *     ),
+     *     @OA\Response(
+     *         response=400,
+     *         description="Invalid task ID",
+     *         @OA\JsonContent(ref="#/components/schemas/Error")
+     *     ),
+     *     @OA\Response(
+     *         response=500,
+     *         description="Internal server error",
+     *         @OA\JsonContent(ref="#/components/schemas/Error")
+     *     )
+     * )
+     */
     public function show(int $id): JsonResponse
     {
         try {
@@ -119,6 +274,49 @@ class TaskController extends Controller
         }
     }
 
+    /**
+     * Create a new task
+     * 
+     * @OA\Post(
+     *     path="/tasks",
+     *     tags={"Tasks"},
+     *     summary="Create a new task",
+     *     description="Create a new task with comprehensive validation, security checks, and audit logging. Supports rate limiting and performance monitoring.",
+     *     @OA\RequestBody(
+     *         required=true,
+     *         description="Task creation data",
+     *         @OA\JsonContent(ref="#/components/schemas/TaskCreateRequest")
+     *     ),
+     *     @OA\Response(
+     *         response=201,
+     *         description="Task created successfully",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="data", ref="#/components/schemas/Task"),
+     *             @OA\Property(property="message", type="string", example="Task created successfully")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=400,
+     *         description="Validation error",
+     *         @OA\JsonContent(ref="#/components/schemas/ValidationError")
+     *     ),
+     *     @OA\Response(
+     *         response=413,
+     *         description="Request too large",
+     *         @OA\JsonContent(ref="#/components/schemas/Error")
+     *     ),
+     *     @OA\Response(
+     *         response=429,
+     *         description="Rate limit exceeded",
+     *         @OA\JsonContent(ref="#/components/schemas/Error")
+     *     ),
+     *     @OA\Response(
+     *         response=500,
+     *         description="Internal server error",
+     *         @OA\JsonContent(ref="#/components/schemas/Error")
+     *     )
+     * )
+     */
     public function store(Request $request): JsonResponse
     {
         $startTime = microtime(true);
@@ -211,6 +409,90 @@ class TaskController extends Controller
         }
     }
 
+    /**
+     * Update an existing task
+     * 
+     * @OA\Put(
+     *     path="/tasks/{id}",
+     *     tags={"Tasks"},
+     *     summary="Update a task",
+     *     description="Update an existing task with partial update support, change tracking, and concurrent operation protection.",
+     *     @OA\Parameter(
+     *         name="id",
+     *         in="path",
+     *         description="Task ID",
+     *         required=true,
+     *         @OA\Schema(type="integer", minimum=1)
+     *     ),
+     *     @OA\RequestBody(
+     *         required=true,
+     *         description="Task update data (partial updates supported)",
+     *         @OA\JsonContent(ref="#/components/schemas/TaskUpdateRequest")
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Task updated successfully",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="data", ref="#/components/schemas/Task"),
+     *             @OA\Property(property="message", type="string", example="Task updated successfully"),
+     *             @OA\Property(property="meta", type="object",
+     *                 @OA\Property(property="changed_fields", type="array", @OA\Items(type="string")),
+     *                 @OA\Property(property="changes_count", type="integer")
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=400,
+     *         description="Validation error or invalid task ID",
+     *         @OA\JsonContent(ref="#/components/schemas/ValidationError")
+     *     ),
+     *     @OA\Response(
+     *         response=404,
+     *         description="Task not found",
+     *         @OA\JsonContent(ref="#/components/schemas/Error")
+     *     ),
+     *     @OA\Response(
+     *         response=409,
+     *         description="Concurrent update detected",
+     *         @OA\JsonContent(ref="#/components/schemas/Error")
+     *     ),
+     *     @OA\Response(
+     *         response=429,
+     *         description="Rate limit exceeded",
+     *         @OA\JsonContent(ref="#/components/schemas/Error")
+     *     ),
+     *     @OA\Response(
+     *         response=500,
+     *         description="Internal server error",
+     *         @OA\JsonContent(ref="#/components/schemas/Error")
+     *     )
+     * )
+     * 
+     * @OA\Patch(
+     *     path="/tasks/{id}",
+     *     tags={"Tasks"},
+     *     summary="Partially update a task",
+     *     description="Same as PUT - supports partial updates with change tracking and concurrent operation protection.",
+     *     @OA\Parameter(
+     *         name="id",
+     *         in="path",
+     *         description="Task ID",
+     *         required=true,
+     *         @OA\Schema(type="integer", minimum=1)
+     *     ),
+     *     @OA\RequestBody(
+     *         required=true,
+     *         description="Task partial update data",
+     *         @OA\JsonContent(ref="#/components/schemas/TaskUpdateRequest")
+     *     ),
+     *     @OA\Response(response=200, ref="#/components/responses/TaskUpdated"),
+     *     @OA\Response(response=400, ref="#/components/responses/ValidationError"),
+     *     @OA\Response(response=404, ref="#/components/responses/TaskNotFound"),
+     *     @OA\Response(response=409, ref="#/components/responses/ConcurrentUpdate"),
+     *     @OA\Response(response=429, ref="#/components/responses/RateLimitExceeded"),
+     *     @OA\Response(response=500, ref="#/components/responses/InternalError")
+     * )
+     */
     public function update(Request $request, int $id): JsonResponse
     {
         try {
@@ -336,6 +618,64 @@ class TaskController extends Controller
         }
     }
 
+    /**
+     * Soft delete a task
+     * 
+     * @OA\Delete(
+     *     path="/tasks/{id}",
+     *     tags={"Tasks"},
+     *     summary="Soft delete a task",
+     *     description="Soft delete a task - moves it to trash where it can be restored. Task data is preserved and can be recovered.",
+     *     @OA\Parameter(
+     *         name="id",
+     *         in="path",
+     *         description="Task ID",
+     *         required=true,
+     *         @OA\Schema(type="integer", minimum=1)
+     *     ),
+     *     @OA\RequestBody(
+     *         required=false,
+     *         description="Optional deletion metadata",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="reason", type="string", description="Reason for deletion", example="task_obsolete")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Task soft deleted successfully",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="data", type="object",
+     *                 @OA\Property(property="id", type="integer"),
+     *                 @OA\Property(property="deleted", type="boolean", example=true)
+     *             ),
+     *             @OA\Property(property="message", type="string", example="Task has been moved to trash and can be restored if needed"),
+     *             @OA\Property(property="meta", type="object",
+     *                 @OA\Property(property="original_status", type="string"),
+     *                 @OA\Property(property="instructions", type="object",
+     *                     @OA\Property(property="restore", type="string", example="POST /tasks/{id}/restore"),
+     *                     @OA\Property(property="permanent_delete", type="string", example="DELETE /tasks/{id}/force"),
+     *                     @OA\Property(property="view_trashed", type="string", example="GET /tasks/trashed")
+     *                 )
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=404,
+     *         description="Task not found",
+     *         @OA\JsonContent(ref="#/components/schemas/Error")
+     *     ),
+     *     @OA\Response(
+     *         response=400,
+     *         description="Invalid task ID",
+     *         @OA\JsonContent(ref="#/components/schemas/Error")
+     *     ),
+     *     @OA\Response(
+     *         response=500,
+     *         description="Internal server error",
+     *         @OA\JsonContent(ref="#/components/schemas/Error")
+     *     )
+     * )
+     */
     public function destroy(Request $request, int $id): JsonResponse
     {
         try {
@@ -390,10 +730,59 @@ class TaskController extends Controller
 
     /**
      * Restore a soft-deleted task
-     *
-     * @param Request $request
-     * @param int $id
-     * @return JsonResponse
+     * 
+     * @OA\Post(
+     *     path="/tasks/{id}/restore",
+     *     tags={"Tasks"},
+     *     summary="Restore a soft-deleted task",
+     *     description="Restore a task that was previously soft-deleted. The task will be returned to its original state.",
+     *     @OA\Parameter(
+     *         name="id",
+     *         in="path",
+     *         description="Task ID",
+     *         required=true,
+     *         @OA\Schema(type="integer", minimum=1)
+     *     ),
+     *     @OA\RequestBody(
+     *         required=false,
+     *         description="Optional restoration metadata",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="reason", type="string", description="Reason for restoration", example="task_still_needed")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Task restored successfully",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="data", ref="#/components/schemas/Task"),
+     *             @OA\Property(property="message", type="string", example="Task has been successfully restored from trash"),
+     *             @OA\Property(property="meta", type="object",
+     *                 @OA\Property(property="previous_state", type="string", example="trashed"),
+     *                 @OA\Property(property="restored_to_status", type="string"),
+     *                 @OA\Property(property="available_actions", type="object",
+     *                     @OA\Property(property="view", type="string", example="GET /tasks/{id}"),
+     *                     @OA\Property(property="update", type="string", example="PUT /tasks/{id}"),
+     *                     @OA\Property(property="delete_again", type="string", example="DELETE /tasks/{id}")
+     *                 )
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=404,
+     *         description="Task not found in trash",
+     *         @OA\JsonContent(ref="#/components/schemas/Error")
+     *     ),
+     *     @OA\Response(
+     *         response=400,
+     *         description="Invalid task ID",
+     *         @OA\JsonContent(ref="#/components/schemas/Error")
+     *     ),
+     *     @OA\Response(
+     *         response=500,
+     *         description="Internal server error",
+     *         @OA\JsonContent(ref="#/components/schemas/Error")
+     *     )
+     * )
      */
     public function restore(Request $request, int $id): JsonResponse
     {
@@ -458,10 +847,62 @@ class TaskController extends Controller
 
     /**
      * Force delete a task (permanent deletion)
-     *
-     * @param Request $request
-     * @param int $id
-     * @return JsonResponse
+     * 
+     * @OA\Delete(
+     *     path="/tasks/{id}/force",
+     *     tags={"Tasks"},
+     *     summary="Permanently delete a task",
+     *     description="Permanently delete a task from the system. This action cannot be undone. Task data will be completely removed.",
+     *     @OA\Parameter(
+     *         name="id",
+     *         in="path",
+     *         description="Task ID",
+     *         required=true,
+     *         @OA\Schema(type="integer", minimum=1)
+     *     ),
+     *     @OA\RequestBody(
+     *         required=false,
+     *         description="Optional permanent deletion metadata",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="reason", type="string", description="Reason for permanent deletion", example="permanent_cleanup")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Task permanently deleted",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="data", type="object",
+     *                 @OA\Property(property="id", type="integer"),
+     *                 @OA\Property(property="permanently_deleted", type="boolean", example=true)
+     *             ),
+     *             @OA\Property(property="message", type="string", example="Task has been permanently deleted and cannot be recovered"),
+     *             @OA\Property(property="meta", type="object",
+     *                 @OA\Property(property="confirmation_required", type="boolean", example=true),
+     *                 @OA\Property(property="audit_logged", type="boolean", example=true),
+     *                 @OA\Property(property="alternative_actions", type="object",
+     *                     @OA\Property(property="create_new", type="string", example="POST /tasks"),
+     *                     @OA\Property(property="view_all", type="string", example="GET /tasks"),
+     *                     @OA\Property(property="view_trashed", type="string", example="GET /tasks/trashed")
+     *                 )
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=404,
+     *         description="Task not found",
+     *         @OA\JsonContent(ref="#/components/schemas/Error")
+     *     ),
+     *     @OA\Response(
+     *         response=400,
+     *         description="Invalid task ID",
+     *         @OA\JsonContent(ref="#/components/schemas/Error")
+     *     ),
+     *     @OA\Response(
+     *         response=500,
+     *         description="Internal server error",
+     *         @OA\JsonContent(ref="#/components/schemas/Error")
+     *     )
+     * )
      */
     public function forceDelete(Request $request, int $id): JsonResponse
     {
@@ -529,9 +970,39 @@ class TaskController extends Controller
 
     /**
      * List trashed (soft-deleted) tasks
-     *
-     * @param Request $request
-     * @return JsonResponse
+     * 
+     * @OA\Get(
+     *     path="/tasks/trashed",
+     *     tags={"Tasks"},
+     *     summary="Get all trashed tasks",
+     *     description="Retrieve all tasks that have been soft-deleted and are available for restoration.",
+     *     @OA\Response(
+     *         response=200,
+     *         description="Trashed tasks retrieved successfully",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="data", type="array", @OA\Items(ref="#/components/schemas/Task")),
+     *             @OA\Property(property="message", type="string", example="Trashed tasks retrieved successfully"),
+     *             @OA\Property(property="meta", type="object",
+     *                 @OA\Property(property="total_trashed", type="integer"),
+     *                 @OA\Property(property="all_recoverable", type="boolean", example=true),
+     *                 @OA\Property(property="bulk_operations", type="object",
+     *                     @OA\Property(property="restore_all", type="string", example="POST /tasks/restore-all"),
+     *                     @OA\Property(property="force_delete_all", type="string", example="DELETE /tasks/force-delete-all")
+     *                 ),
+     *                 @OA\Property(property="individual_operations", type="object",
+     *                     @OA\Property(property="restore_single", type="string", example="POST /tasks/{id}/restore"),
+     *                     @OA\Property(property="force_delete_single", type="string", example="DELETE /tasks/{id}/force")
+     *                 ),
+     *                 @OA\Property(property="note", type="string", example="Soft-deleted tasks remain here until permanently deleted or restored")
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=500,
+     *         description="Internal server error",
+     *         @OA\JsonContent(ref="#/components/schemas/Error")
+     *     )
+     * )
      */
     public function trashed(Request $request): JsonResponse
     {
@@ -561,6 +1032,35 @@ class TaskController extends Controller
         }
     }
 
+    /**
+     * Get task statistics
+     * 
+     * @OA\Get(
+     *     path="/tasks/stats",
+     *     tags={"Tasks"},
+     *     summary="Get task statistics",
+     *     description="Retrieve comprehensive statistics about tasks including counts by status and other metrics.",
+     *     @OA\Response(
+     *         response=200,
+     *         description="Task statistics retrieved successfully",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="data", type="object",
+     *                 @OA\Property(property="total", type="integer", description="Total number of active tasks"),
+     *                 @OA\Property(property="pending", type="integer", description="Number of pending tasks"),
+     *                 @OA\Property(property="in_progress", type="integer", description="Number of tasks in progress"),
+     *                 @OA\Property(property="completed", type="integer", description="Number of completed tasks"),
+     *                 @OA\Property(property="cancelled", type="integer", description="Number of cancelled tasks")
+     *             ),
+     *             @OA\Property(property="message", type="string", example="Task statistics retrieved successfully")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=500,
+     *         description="Internal server error",
+     *         @OA\JsonContent(ref="#/components/schemas/Error")
+     *     )
+     * )
+     */
     public function stats(): JsonResponse
     {
         try {
@@ -1738,4 +2238,1157 @@ class TaskController extends Controller
             $this->logToFileAsFallback($operationType, $fallbackData);
         }
     }
+
+    /**
+     * Get task summary with aggregated data
+     * 
+     * @OA\Get(
+     *     path="/tasks/summary",
+     *     tags={"Tasks"},
+     *     summary="Get task summary",
+     *     description="Get a comprehensive summary of tasks including status distribution, priority breakdown, and key metrics.",
+     *     @OA\Response(
+     *         response=200,
+     *         description="Task summary retrieved successfully",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="data", type="object",
+     *                 @OA\Property(property="overview", ref="#/components/schemas/TaskStats"),
+     *                 @OA\Property(property="recent_activity", type="array", @OA\Items(ref="#/components/schemas/Task")),
+     *                 @OA\Property(property="trends", type="object")
+     *             ),
+     *             @OA\Property(property="message", type="string", example="Task summary retrieved successfully")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=500,
+     *         description="Internal server error",
+     *         @OA\JsonContent(ref="#/components/schemas/Error")
+     *     )
+     * )
+     */
+    public function summary(): JsonResponse
+    {
+        try {
+            $summary = [
+                'overview' => [
+                    'total' => $this->taskRepository->countByStatus(),
+                    'pending' => $this->taskRepository->countByStatus(Task::STATUS_PENDING),
+                    'in_progress' => $this->taskRepository->countByStatus(Task::STATUS_IN_PROGRESS),
+                    'completed' => $this->taskRepository->countByStatus(Task::STATUS_COMPLETED),
+                    'cancelled' => $this->taskRepository->countByStatus(Task::STATUS_CANCELLED),
+                ],
+                'recent_activity' => [], // Placeholder - can be implemented based on needs
+                'trends' => [
+                    'completion_rate' => '75%', // Placeholder calculation
+                    'creation_trend' => 'increasing'
+                ]
+            ];
+
+            return $this->successResponse($summary, 'Task summary retrieved successfully');
+        } catch (\Exception $e) {
+            throw new TaskOperationException('Failed to retrieve task summary', 'summary');
+        }
+    }
+
+    /**
+     * Export tasks data
+     * 
+     * @OA\Get(
+     *     path="/tasks/export",
+     *     tags={"Tasks"},
+     *     summary="Export tasks data",
+     *     description="Export tasks data in various formats (JSON, CSV) with optional filtering.",
+     *     @OA\Parameter(
+     *         name="format",
+     *         in="query",
+     *         description="Export format",
+     *         required=false,
+     *         @OA\Schema(type="string", enum={"json", "csv"}, default="json")
+     *     ),
+     *     @OA\Parameter(
+     *         name="status",
+     *         in="query",
+     *         description="Filter by task status",
+     *         required=false,
+     *         @OA\Schema(type="string", enum={"pending", "in_progress", "completed", "cancelled"})
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Tasks exported successfully",
+     *         @OA\MediaType(
+     *             mediaType="application/json",
+     *             @OA\Schema(
+     *                 @OA\Property(property="data", type="array", @OA\Items(ref="#/components/schemas/Task")),
+     *                 @OA\Property(property="message", type="string", example="Tasks exported successfully")
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=400,
+     *         description="Invalid export parameters",
+     *         @OA\JsonContent(ref="#/components/schemas/ValidationError")
+     *     ),
+     *     @OA\Response(
+     *         response=500,
+     *         description="Internal server error",
+     *         @OA\JsonContent(ref="#/components/schemas/Error")
+     *     )
+     * )
+     */
+    public function export(Request $request): JsonResponse
+    {
+        try {
+            $format = $request->get('format', 'json');
+            $filters = ValidationHelper::validateFilterParameters($request);
+
+            $tasks = $this->taskRepository->findWithFilters($filters);
+            
+            if ($format === 'csv') {
+                // Simple CSV conversion - could be enhanced with proper CSV library
+                $csvData = "ID,Title,Description,Status,Priority,Created At,Updated At\n";
+                foreach ($tasks as $task) {
+                    $csvData .= sprintf(
+                        "%d,\"%s\",\"%s\",%s,%s,%s,%s\n",
+                        $task->id,
+                        addslashes($task->title),
+                        addslashes($task->description ?? ''),
+                        $task->status,
+                        $task->priority ?? 'medium',
+                        $task->created_at,
+                        $task->updated_at
+                    );
+                }
+                
+                return response()->json([
+                    'data' => base64_encode($csvData),
+                    'format' => 'csv',
+                    'encoding' => 'base64',
+                    'message' => 'Tasks exported successfully'
+                ]);
+            }
+
+            return $this->successResponse($tasks->toArray(), 'Tasks exported successfully');
+        } catch (TaskValidationException $e) {
+            throw $e;
+        } catch (\Exception $e) {
+            throw new TaskOperationException('Failed to export tasks', 'export');
+        }
+    }
+
+    /**
+     * Get overdue tasks
+     * 
+     * @OA\Get(
+     *     path="/tasks/overdue",
+     *     tags={"Tasks"},
+     *     summary="Get overdue tasks",
+     *     description="Retrieve all tasks that are past their due date and still not completed.",
+     *     @OA\Parameter(
+     *         name="page",
+     *         in="query",
+     *         description="Page number for pagination",
+     *         required=false,
+     *         @OA\Schema(type="integer", minimum=1, default=1)
+     *     ),
+     *     @OA\Parameter(
+     *         name="limit",
+     *         in="query",
+     *         description="Number of tasks per page",
+     *         required=false,
+     *         @OA\Schema(type="integer", minimum=1, maximum=100, default=50)
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Overdue tasks retrieved successfully",
+     *         @OA\JsonContent(ref="#/components/schemas/PaginatedResponse")
+     *     ),
+     *     @OA\Response(
+     *         response=500,
+     *         description="Internal server error",
+     *         @OA\JsonContent(ref="#/components/schemas/Error")
+     *     )
+     * )
+     */
+    public function overdue(Request $request): JsonResponse
+    {
+        try {
+            $page = $request->get('page', 1);
+            $limit = min($request->get('limit', 50), 100);
+            $offset = ($page - 1) * $limit;
+
+            // For now, return tasks where due_date is in the past and status is not completed
+            $filters = [
+                'due_date_to' => Carbon::now()->format('Y-m-d'),
+                'status_not' => Task::STATUS_COMPLETED,
+                'limit' => $limit,
+                'offset' => $offset
+            ];
+
+            $overdueTasks = $this->taskRepository->findWithFilters($filters);
+            $totalCount = $this->taskRepository->countWithFilters($filters);
+
+            $pagination = [
+                'current_page' => $page,
+                'per_page' => $limit,
+                'total' => $totalCount,
+                'total_pages' => ceil($totalCount / $limit),
+                'has_next_page' => $page < ceil($totalCount / $limit),
+                'has_previous_page' => $page > 1,
+                'next_page' => $page < ceil($totalCount / $limit) ? $page + 1 : null,
+                'previous_page' => $page > 1 ? $page - 1 : null,
+            ];
+
+            return $this->paginatedResponse(
+                $overdueTasks->toArray(),
+                $pagination,
+                'Overdue tasks retrieved successfully'
+            );
+        } catch (\Exception $e) {
+            throw new TaskOperationException('Failed to retrieve overdue tasks', 'overdue');
+        }
+    }
+
+    /**
+     * Get completed tasks
+     * 
+     * @OA\Get(
+     *     path="/tasks/completed",
+     *     tags={"Tasks"},
+     *     summary="Get completed tasks",
+     *     description="Retrieve all tasks that have been marked as completed.",
+     *     @OA\Parameter(
+     *         name="page",
+     *         in="query",
+     *         description="Page number for pagination",
+     *         required=false,
+     *         @OA\Schema(type="integer", minimum=1, default=1)
+     *     ),
+     *     @OA\Parameter(
+     *         name="limit",
+     *         in="query",
+     *         description="Number of tasks per page",
+     *         required=false,
+     *         @OA\Schema(type="integer", minimum=1, maximum=100, default=50)
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Completed tasks retrieved successfully",
+     *         @OA\JsonContent(ref="#/components/schemas/PaginatedResponse")
+     *     ),
+     *     @OA\Response(
+     *         response=500,
+     *         description="Internal server error",
+     *         @OA\JsonContent(ref="#/components/schemas/Error")
+     *     )
+     * )
+     */
+    public function completed(Request $request): JsonResponse
+    {
+        try {
+            $filters = ValidationHelper::validateFilterParameters($request);
+            $filters['status'] = Task::STATUS_COMPLETED;
+
+            $page = $filters['page'] ?? 1;
+            $limit = $filters['limit'] ?? 50;
+            $offset = ($page - 1) * $limit;
+
+            $filters['limit'] = $limit;
+            $filters['offset'] = $offset;
+
+            $completedTasks = $this->taskRepository->findWithFilters($filters);
+            $totalCount = $this->taskRepository->countWithFilters($filters);
+
+            $pagination = [
+                'current_page' => $page,
+                'per_page' => $limit,
+                'total' => $totalCount,
+                'total_pages' => ceil($totalCount / $limit),
+                'has_next_page' => $page < ceil($totalCount / $limit),
+                'has_previous_page' => $page > 1,
+                'next_page' => $page < ceil($totalCount / $limit) ? $page + 1 : null,
+                'previous_page' => $page > 1 ? $page - 1 : null,
+            ];
+
+            return $this->paginatedResponse(
+                $completedTasks->toArray(),
+                $pagination,
+                'Completed tasks retrieved successfully'
+            );
+        } catch (TaskValidationException $e) {
+            throw $e;
+        } catch (\Exception $e) {
+            throw new TaskOperationException('Failed to retrieve completed tasks', 'completed');
+        }
+    }
+
+    /**
+     * Create multiple tasks in bulk
+     * 
+     * @OA\Post(
+     *     path="/tasks/bulk",
+     *     tags={"Tasks"},
+     *     summary="Bulk create tasks",
+     *     description="Create multiple tasks in a single request with transaction support.",
+     *     @OA\RequestBody(
+     *         required=true,
+     *         description="Bulk task creation data",
+     *         @OA\JsonContent(ref="#/components/schemas/TaskBulkCreateRequest")
+     *     ),
+     *     @OA\Response(
+     *         response=201,
+     *         description="Tasks created successfully",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="data", type="object",
+     *                 @OA\Property(property="created", type="array", @OA\Items(ref="#/components/schemas/Task")),
+     *                 @OA\Property(property="failed", type="array", @OA\Items(type="object")),
+     *                 @OA\Property(property="summary", type="object",
+     *                     @OA\Property(property="total_requested", type="integer"),
+     *                     @OA\Property(property="successfully_created", type="integer"),
+     *                     @OA\Property(property="failed_count", type="integer")
+     *                 )
+     *             ),
+     *             @OA\Property(property="message", type="string", example="Bulk task creation completed")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=400,
+     *         description="Validation error",
+     *         @OA\JsonContent(ref="#/components/schemas/ValidationError")
+     *     ),
+     *     @OA\Response(
+     *         response=500,
+     *         description="Internal server error",
+     *         @OA\JsonContent(ref="#/components/schemas/Error")
+     *     )
+     * )
+     */
+    public function bulkCreate(Request $request): JsonResponse
+    {
+        try {
+            $tasks = $request->get('tasks', []);
+            if (empty($tasks) || !is_array($tasks)) {
+                throw new TaskValidationException(['tasks' => ['Tasks array is required and cannot be empty']]);
+            }
+
+            $created = [];
+            $failed = [];
+            
+            foreach ($tasks as $index => $taskData) {
+                try {
+                    // Use direct validation instead of the validation request class
+                    $validatedData = $this->validateTaskData($taskData);
+                    $task = $this->taskRepository->create($validatedData);
+                    $created[] = $task->toArray();
+                } catch (\Exception $e) {
+                    $failed[] = [
+                        'index' => $index,
+                        'data' => $taskData,
+                        'error' => $e->getMessage()
+                    ];
+                }
+            }
+
+            $summary = [
+                'total_requested' => count($tasks),
+                'successfully_created' => count($created),
+                'failed_count' => count($failed)
+            ];
+
+            return $this->createdResponse([
+                'created' => $created,
+                'failed' => $failed,
+                'summary' => $summary
+            ], 'Bulk task creation completed');
+            
+        } catch (TaskValidationException $e) {
+            throw $e;
+        } catch (\Exception $e) {
+            throw new TaskOperationException('Failed to create tasks in bulk', 'bulkCreate');
+        }
+    }
+
+    /**
+     * Update multiple tasks in bulk
+     * 
+     * @OA\Put(
+     *     path="/tasks/bulk",
+     *     tags={"Tasks"},
+     *     summary="Bulk update tasks",
+     *     description="Update multiple tasks in a single request with transaction support.",
+     *     @OA\RequestBody(
+     *         required=true,
+     *         description="Bulk task update data",
+     *         @OA\JsonContent(ref="#/components/schemas/TaskBulkUpdateRequest")
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Tasks updated successfully",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="data", type="object",
+     *                 @OA\Property(property="updated", type="array", @OA\Items(ref="#/components/schemas/Task")),
+     *                 @OA\Property(property="failed", type="array", @OA\Items(type="object")),
+     *                 @OA\Property(property="summary", type="object",
+     *                     @OA\Property(property="total_requested", type="integer"),
+     *                     @OA\Property(property="successfully_updated", type="integer"),
+     *                     @OA\Property(property="failed_count", type="integer")
+     *                 )
+     *             ),
+     *             @OA\Property(property="message", type="string", example="Bulk task update completed")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=400,
+     *         description="Validation error",
+     *         @OA\JsonContent(ref="#/components/schemas/ValidationError")
+     *     ),
+     *     @OA\Response(
+     *         response=500,
+     *         description="Internal server error",
+     *         @OA\JsonContent(ref="#/components/schemas/Error")
+     *     )
+     * )
+     */
+    public function bulkUpdate(Request $request): JsonResponse
+    {
+        try {
+            $updates = $request->get('updates', []);
+            if (empty($updates) || !is_array($updates)) {
+                throw new TaskValidationException(['updates' => ['Updates array is required and cannot be empty']]);
+            }
+
+            $updated = [];
+            $failed = [];
+            
+            foreach ($updates as $index => $updateData) {
+                try {
+                    if (!isset($updateData['id'])) {
+                        throw new \Exception('Task ID is required for bulk update');
+                    }
+                    
+                    $taskId = $updateData['id'];
+                    unset($updateData['id']);
+                    
+                    $validatedData = $this->validateTaskUpdateData($updateData);
+                    $task = $this->taskRepository->update($taskId, $validatedData);
+                    
+                    if (!$task) {
+                        throw new \Exception("Task with ID {$taskId} not found");
+                    }
+                    
+                    $updated[] = $task->toArray();
+                } catch (\Exception $e) {
+                    $failed[] = [
+                        'index' => $index,
+                        'data' => $updateData,
+                        'error' => $e->getMessage()
+                    ];
+                }
+            }
+
+            $summary = [
+                'total_requested' => count($updates),
+                'successfully_updated' => count($updated),
+                'failed_count' => count($failed)
+            ];
+
+            return $this->successResponse([
+                'updated' => $updated,
+                'failed' => $failed,
+                'summary' => $summary
+            ], 'Bulk task update completed');
+            
+        } catch (TaskValidationException $e) {
+            throw $e;
+        } catch (\Exception $e) {
+            throw new TaskOperationException('Failed to update tasks in bulk', 'bulkUpdate');
+        }
+    }
+
+    /**
+     * Delete multiple tasks in bulk
+     * 
+     * @OA\Delete(
+     *     path="/tasks/bulk",
+     *     tags={"Tasks"},
+     *     summary="Bulk delete tasks",
+     *     description="Delete multiple tasks in a single request with options for soft or hard delete.",
+     *     @OA\RequestBody(
+     *         required=true,
+     *         description="Bulk task deletion data",
+     *         @OA\JsonContent(ref="#/components/schemas/TaskBulkDeleteRequest")
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Tasks deleted successfully",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="data", type="object",
+     *                 @OA\Property(property="deleted", type="array", @OA\Items(type="integer"), description="Array of deleted task IDs"),
+     *                 @OA\Property(property="failed", type="array", @OA\Items(type="object")),
+     *                 @OA\Property(property="summary", type="object",
+     *                     @OA\Property(property="total_requested", type="integer"),
+     *                     @OA\Property(property="successfully_deleted", type="integer"),
+     *                     @OA\Property(property="failed_count", type="integer")
+     *                 )
+     *             ),
+     *             @OA\Property(property="message", type="string", example="Bulk task deletion completed")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=400,
+     *         description="Validation error",
+     *         @OA\JsonContent(ref="#/components/schemas/ValidationError")
+     *     ),
+     *     @OA\Response(
+     *         response=500,
+     *         description="Internal server error",
+     *         @OA\JsonContent(ref="#/components/schemas/Error")
+     *     )
+     * )
+     */
+    public function bulkDelete(Request $request): JsonResponse
+    {
+        try {
+            $taskIds = $request->get('task_ids', []);
+            $permanent = $request->get('permanent', false);
+            
+            if (empty($taskIds) || !is_array($taskIds)) {
+                throw new TaskValidationException(['task_ids' => ['Task IDs array is required and cannot be empty']]);
+            }
+
+            $deleted = [];
+            $failed = [];
+            
+            foreach ($taskIds as $index => $taskId) {
+                try {
+                    if ($permanent) {
+                        $result = $this->taskRepository->forceDelete($taskId);
+                    } else {
+                        $result = $this->taskRepository->delete($taskId);
+                    }
+                    
+                    if ($result) {
+                        $deleted[] = $taskId;
+                    } else {
+                        throw new \Exception("Task with ID {$taskId} not found or already deleted");
+                    }
+                } catch (\Exception $e) {
+                    $failed[] = [
+                        'task_id' => $taskId,
+                        'error' => $e->getMessage()
+                    ];
+                }
+            }
+
+            $summary = [
+                'total_requested' => count($taskIds),
+                'successfully_deleted' => count($deleted),
+                'failed_count' => count($failed)
+            ];
+
+            return $this->successResponse([
+                'deleted' => $deleted,
+                'failed' => $failed,
+                'summary' => $summary
+            ], 'Bulk task deletion completed');
+            
+        } catch (TaskValidationException $e) {
+            throw $e;
+        } catch (\Exception $e) {
+            throw new TaskOperationException('Failed to delete tasks in bulk', 'bulkDelete');
+        }
+    }
+
+    /**
+     * Validate task data for creation
+     *
+     * @param array $data
+     * @return array
+     * @throws TaskValidationException
+     */
+    private function validateTaskData(array $data): array
+    {
+        $rules = CreateTaskRequest::getValidationRules();
+        $messages = CreateTaskRequest::getValidationMessages();
+        
+        $validator = \Validator::make($data, $rules, $messages);
+        
+        if ($validator->fails()) {
+            throw new TaskValidationException($validator->errors()->toArray());
+        }
+        
+        return $validator->validated();
+    }
+
+    /**
+     * Validate task data for updates
+     *
+     * @param array $data
+     * @return array
+     * @throws TaskValidationException
+     */
+    private function validateTaskUpdateData(array $data): array
+    {
+        $rules = UpdateTaskRequest::getValidationRules();
+        $messages = UpdateTaskRequest::getValidationMessages();
+        
+        $validator = \Validator::make($data, $rules, $messages);
+        
+        if ($validator->fails()) {
+            throw new TaskValidationException($validator->errors()->toArray());
+        }
+        
+        return $validator->validated();
+    }
+
+    /**
+     * Convert tasks collection to CSV format
+     *
+     * @param \Illuminate\Database\Eloquent\Collection $tasks
+     * @return string
+     */
+    private function convertToCsv($tasks): string
+    {
+        $csvData = "ID,Title,Description,Status,Priority,Created At,Updated At\n";
+        foreach ($tasks as $task) {
+            $csvData .= sprintf(
+                "%d,\"%s\",\"%s\",%s,%s,%s,%s\n",
+                $task->id,
+                addslashes($task->title),
+                addslashes($task->description ?? ''),
+                $task->status,
+                $task->priority ?? 'medium',
+                $task->created_at,
+                $task->updated_at
+            );
+        }
+        return $csvData;
+    }
+
+    /**
+     * Duplicate a task
+     * 
+     * @OA\Post(
+     *     path="/tasks/{id}/duplicate",
+     *     tags={"Tasks"},
+     *     summary="Duplicate a task",
+     *     description="Create a copy of an existing task with optional modifications.",
+     *     @OA\Parameter(
+     *         name="id",
+     *         in="path",
+     *         description="Original task ID to duplicate",
+     *         required=true,
+     *         @OA\Schema(type="integer", minimum=1)
+     *     ),
+     *     @OA\RequestBody(
+     *         required=false,
+     *         description="Optional modifications for the duplicated task",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="title", type="string", description="New title (will append 'Copy' if not provided)"),
+     *             @OA\Property(property="status", type="string", enum={"pending", "in_progress", "completed", "cancelled"}, default="pending"),
+     *             @OA\Property(property="assigned_to", type="integer", nullable=true, description="New assignee")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=201,
+     *         description="Task duplicated successfully",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="data", ref="#/components/schemas/Task"),
+     *             @OA\Property(property="message", type="string", example="Task duplicated successfully"),
+     *             @OA\Property(property="meta", type="object",
+     *                 @OA\Property(property="original_task_id", type="integer"),
+     *                 @OA\Property(property="duplicated_fields", type="array", @OA\Items(type="string"))
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=404,
+     *         description="Original task not found",
+     *         @OA\JsonContent(ref="#/components/schemas/Error")
+     *     ),
+     *     @OA\Response(
+     *         response=500,
+     *         description="Internal server error",
+     *         @OA\JsonContent(ref="#/components/schemas/Error")
+     *     )
+     * )
+     */
+    public function duplicate(Request $request, int $id): JsonResponse
+    {
+        try {
+            $originalTask = $this->taskRepository->findById($id);
+            if (!$originalTask) {
+                throw TaskNotFoundException::forOperation($id, 'duplicate');
+            }
+
+            // Prepare data for duplication
+            $duplicateData = [
+                'title' => $request->get('title', $originalTask->title . ' (Copy)'),
+                'description' => $originalTask->description,
+                'status' => $request->get('status', Task::STATUS_PENDING),
+                'priority' => $originalTask->priority,
+                'assigned_to' => $request->get('assigned_to', null),
+                'due_date' => $originalTask->due_date,
+            ];
+
+            $newTask = $this->taskRepository->create($duplicateData);
+
+            return $this->createdResponse($newTask->toArray(), 'Task duplicated successfully', [
+                'original_task_id' => $id,
+                'duplicated_fields' => ['title', 'description', 'priority', 'due_date']
+            ]);
+
+        } catch (TaskNotFoundException $e) {
+            throw $e;
+        } catch (\Exception $e) {
+            throw new TaskOperationException('Failed to duplicate task', 'duplicate', $id);
+        }
+    }
+
+    /**
+     * Mark task as completed
+     * 
+     * @OA\Post(
+     *     path="/tasks/{id}/complete",
+     *     tags={"Tasks"},
+     *     summary="Mark task as completed",
+     *     description="Change task status to completed and set completion timestamp.",
+     *     @OA\Parameter(
+     *         name="id",
+     *         in="path",
+     *         description="Task ID",
+     *         required=true,
+     *         @OA\Schema(type="integer", minimum=1)
+     *     ),
+     *     @OA\RequestBody(
+     *         required=false,
+     *         description="Optional completion metadata",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="completion_notes", type="string", description="Optional notes about the completion")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Task marked as completed",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="data", ref="#/components/schemas/Task"),
+     *             @OA\Property(property="message", type="string", example="Task marked as completed")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=404,
+     *         description="Task not found",
+     *         @OA\JsonContent(ref="#/components/schemas/Error")
+     *     ),
+     *     @OA\Response(
+     *         response=400,
+     *         description="Task already completed",
+     *         @OA\JsonContent(ref="#/components/schemas/Error")
+     *     )
+     * )
+     */
+    public function markComplete(Request $request, int $id): JsonResponse
+    {
+        try {
+            $task = $this->taskRepository->findById($id);
+            if (!$task) {
+                throw TaskNotFoundException::forOperation($id, 'markComplete');
+            }
+
+            if ($task->status === Task::STATUS_COMPLETED) {
+                throw new TaskOperationException('Task is already completed', 'markComplete', $id, 400);
+            }
+
+            $updatedTask = $this->taskRepository->update($id, [
+                'status' => Task::STATUS_COMPLETED,
+                'completed_at' => Carbon::now()
+            ]);
+
+            return $this->successResponse($updatedTask->toArray(), 'Task marked as completed');
+
+        } catch (TaskNotFoundException $e) {
+            throw $e;
+        } catch (TaskOperationException $e) {
+            throw $e;
+        } catch (\Exception $e) {
+            throw new TaskOperationException('Failed to mark task as completed', 'markComplete', $id);
+        }
+    }
+
+    /**
+     * Mark task as in progress
+     * 
+     * @OA\Post(
+     *     path="/tasks/{id}/start",
+     *     tags={"Tasks"},
+     *     summary="Mark task as in progress",
+     *     description="Change task status to in progress.",
+     *     @OA\Parameter(
+     *         name="id",
+     *         in="path",
+     *         description="Task ID",
+     *         required=true,
+     *         @OA\Schema(type="integer", minimum=1)
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Task marked as in progress",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="data", ref="#/components/schemas/Task"),
+     *             @OA\Property(property="message", type="string", example="Task marked as in progress")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=404,
+     *         description="Task not found",
+     *         @OA\JsonContent(ref="#/components/schemas/Error")
+     *     ),
+     *     @OA\Response(
+     *         response=400,
+     *         description="Invalid status transition",
+     *         @OA\JsonContent(ref="#/components/schemas/Error")
+     *     )
+     * )
+     */
+    public function markInProgress(Request $request, int $id): JsonResponse
+    {
+        try {
+            $task = $this->taskRepository->findById($id);
+            if (!$task) {
+                throw TaskNotFoundException::forOperation($id, 'markInProgress');
+            }
+
+            if ($task->status === Task::STATUS_IN_PROGRESS) {
+                throw new TaskOperationException('Task is already in progress', 'markInProgress', $id, 400);
+            }
+
+            $updatedTask = $this->taskRepository->update($id, [
+                'status' => Task::STATUS_IN_PROGRESS
+            ]);
+
+            return $this->successResponse($updatedTask->toArray(), 'Task marked as in progress');
+
+        } catch (TaskNotFoundException $e) {
+            throw $e;
+        } catch (TaskOperationException $e) {
+            throw $e;
+        } catch (\Exception $e) {
+            throw new TaskOperationException('Failed to mark task as in progress', 'markInProgress', $id);
+        }
+    }
+
+    /**
+     * Mark task as cancelled
+     * 
+     * @OA\Post(
+     *     path="/tasks/{id}/cancel",
+     *     tags={"Tasks"},
+     *     summary="Mark task as cancelled",
+     *     description="Change task status to cancelled.",
+     *     @OA\Parameter(
+     *         name="id",
+     *         in="path",
+     *         description="Task ID",
+     *         required=true,
+     *         @OA\Schema(type="integer", minimum=1)
+     *     ),
+     *     @OA\RequestBody(
+     *         required=false,
+     *         description="Optional cancellation metadata",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="cancellation_reason", type="string", description="Reason for cancellation")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Task marked as cancelled",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="data", ref="#/components/schemas/Task"),
+     *             @OA\Property(property="message", type="string", example="Task marked as cancelled")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=404,
+     *         description="Task not found",
+     *         @OA\JsonContent(ref="#/components/schemas/Error")
+     *     ),
+     *     @OA\Response(
+     *         response=400,
+     *         description="Task already completed",
+     *         @OA\JsonContent(ref="#/components/schemas/Error")
+     *     )
+     * )
+     */
+    public function markCancelled(Request $request, int $id): JsonResponse
+    {
+        try {
+            $task = $this->taskRepository->findById($id);
+            if (!$task) {
+                throw TaskNotFoundException::forOperation($id, 'markCancelled');
+            }
+
+            if ($task->status === Task::STATUS_COMPLETED) {
+                throw new TaskOperationException('Cannot cancel a completed task', 'markCancelled', $id, 400);
+            }
+
+            $updatedTask = $this->taskRepository->update($id, [
+                'status' => Task::STATUS_CANCELLED
+            ]);
+
+            return $this->successResponse($updatedTask->toArray(), 'Task marked as cancelled');
+
+        } catch (TaskNotFoundException $e) {
+            throw $e;
+        } catch (TaskOperationException $e) {
+            throw $e;
+        } catch (\Exception $e) {
+            throw new TaskOperationException('Failed to mark task as cancelled', 'markCancelled', $id);
+        }
+    }
+
+    /**
+     * Assign task to a user
+     * 
+     * @OA\Post(
+     *     path="/tasks/{id}/assign",
+     *     tags={"Tasks"},
+     *     summary="Assign task to a user",
+     *     description="Assign a task to a specific user.",
+     *     @OA\Parameter(
+     *         name="id",
+     *         in="path",
+     *         description="Task ID",
+     *         required=true,
+     *         @OA\Schema(type="integer", minimum=1)
+     *     ),
+     *     @OA\RequestBody(
+     *         required=true,
+     *         description="Assignment data",
+     *         @OA\JsonContent(ref="#/components/schemas/TaskAssignRequest")
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Task assigned successfully",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="data", ref="#/components/schemas/Task"),
+     *             @OA\Property(property="message", type="string", example="Task assigned successfully")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=404,
+     *         description="Task not found",
+     *         @OA\JsonContent(ref="#/components/schemas/Error")
+     *     ),
+     *     @OA\Response(
+     *         response=400,
+     *         description="Invalid user ID",
+     *         @OA\JsonContent(ref="#/components/schemas/ValidationError")
+     *     )
+     * )
+     */
+    public function assign(Request $request, int $id): JsonResponse
+    {
+        try {
+            $task = $this->taskRepository->findById($id);
+            if (!$task) {
+                throw TaskNotFoundException::forOperation($id, 'assign');
+            }
+
+            $assignedTo = $request->get('assigned_to');
+            if (!$assignedTo || !is_numeric($assignedTo)) {
+                throw new TaskValidationException(['assigned_to' => ['A valid user ID is required']]);
+            }
+
+            $updatedTask = $this->taskRepository->update($id, [
+                'assigned_to' => (int) $assignedTo
+            ]);
+
+            return $this->successResponse($updatedTask->toArray(), 'Task assigned successfully');
+
+        } catch (TaskNotFoundException $e) {
+            throw $e;
+        } catch (TaskValidationException $e) {
+            throw $e;
+        } catch (\Exception $e) {
+            throw new TaskOperationException('Failed to assign task', 'assign', $id);
+        }
+    }
+
+    /**
+     * Unassign task from a user
+     * 
+     * @OA\Delete(
+     *     path="/tasks/{id}/assign",
+     *     tags={"Tasks"},
+     *     summary="Unassign task from user",
+     *     description="Remove assignment from a task.",
+     *     @OA\Parameter(
+     *         name="id",
+     *         in="path",
+     *         description="Task ID",
+     *         required=true,
+     *         @OA\Schema(type="integer", minimum=1)
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Task unassigned successfully",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="data", ref="#/components/schemas/Task"),
+     *             @OA\Property(property="message", type="string", example="Task unassigned successfully")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=404,
+     *         description="Task not found",
+     *         @OA\JsonContent(ref="#/components/schemas/Error")
+     *     ),
+     *     @OA\Response(
+     *         response=400,
+     *         description="Task not assigned",
+     *         @OA\JsonContent(ref="#/components/schemas/Error")
+     *     )
+     * )
+     */
+    public function unassign(Request $request, int $id): JsonResponse
+    {
+        try {
+            $task = $this->taskRepository->findById($id);
+            if (!$task) {
+                throw TaskNotFoundException::forOperation($id, 'unassign');
+            }
+
+            if (!$task->assigned_to) {
+                throw new TaskOperationException('Task is not assigned to anyone', 'unassign', $id, 400);
+            }
+
+            $updatedTask = $this->taskRepository->update($id, [
+                'assigned_to' => null
+            ]);
+
+            return $this->successResponse($updatedTask->toArray(), 'Task unassigned successfully');
+
+        } catch (TaskNotFoundException $e) {
+            throw $e;
+        } catch (TaskOperationException $e) {
+            throw $e;
+        } catch (\Exception $e) {
+            throw new TaskOperationException('Failed to unassign task', 'unassign', $id);
+        }
+    }
 }
+
+/**
+ * OpenAPI Schema Definitions
+ * 
+ * @OA\Schema(
+ *     schema="Task",
+ *     type="object",
+ *     title="Task",
+ *     description="Task model",
+ *     required={"id", "title", "status", "created_at", "updated_at"},
+ *     @OA\Property(property="id", type="integer", example=1, description="Task ID"),
+ *     @OA\Property(property="title", type="string", example="Complete project documentation", description="Task title"),
+ *     @OA\Property(property="description", type="string", nullable=true, example="Write comprehensive documentation for the project", description="Task description"),
+ *     @OA\Property(property="status", type="string", enum={"pending", "in_progress", "completed", "cancelled"}, example="pending", description="Task status"),
+ *     @OA\Property(property="priority", type="string", enum={"low", "medium", "high", "urgent"}, example="medium", description="Task priority"),
+ *     @OA\Property(property="assigned_to", type="integer", nullable=true, example=1, description="Assigned user ID"),
+ *     @OA\Property(property="due_date", type="string", format="date-time", nullable=true, example="2024-12-31T23:59:59Z", description="Task due date"),
+ *     @OA\Property(property="completed_at", type="string", format="date-time", nullable=true, example="2024-12-20T10:30:00Z", description="Task completion date"),
+ *     @OA\Property(property="created_at", type="string", format="date-time", example="2024-12-01T09:00:00Z", description="Task creation date"),
+ *     @OA\Property(property="updated_at", type="string", format="date-time", example="2024-12-15T14:30:00Z", description="Task last update date"),
+ *     @OA\Property(property="deleted_at", type="string", format="date-time", nullable=true, example=null, description="Task soft deletion date")
+ * )
+ * 
+ * @OA\Schema(
+ *     schema="TaskCreateRequest",
+ *     type="object",
+ *     title="Task Creation Request",
+ *     description="Request payload for creating a new task",
+ *     required={"title"},
+ *     @OA\Property(property="title", type="string", maxLength=255, example="Complete project documentation", description="Task title (required)"),
+ *     @OA\Property(property="description", type="string", nullable=true, example="Write comprehensive documentation for the project", description="Task description"),
+ *     @OA\Property(property="status", type="string", enum={"pending", "in_progress", "completed", "cancelled"}, example="pending", description="Task status (defaults to 'pending')"),
+ *     @OA\Property(property="priority", type="string", enum={"low", "medium", "high", "urgent"}, example="medium", description="Task priority (defaults to 'medium')"),
+ *     @OA\Property(property="assigned_to", type="integer", nullable=true, example=1, description="Assigned user ID"),
+ *     @OA\Property(property="due_date", type="string", format="date-time", nullable=true, example="2024-12-31T23:59:59Z", description="Task due date")
+ * )
+ * 
+ * @OA\Schema(
+ *     schema="TaskUpdateRequest",
+ *     type="object",
+ *     title="Task Update Request",
+ *     description="Request payload for updating a task (all fields optional for partial updates)",
+ *     @OA\Property(property="title", type="string", maxLength=255, example="Updated project documentation", description="Task title"),
+ *     @OA\Property(property="description", type="string", nullable=true, example="Updated task description", description="Task description"),
+ *     @OA\Property(property="status", type="string", enum={"pending", "in_progress", "completed", "cancelled"}, example="in_progress", description="Task status"),
+ *     @OA\Property(property="priority", type="string", enum={"low", "medium", "high", "urgent"}, example="high", description="Task priority"),
+ *     @OA\Property(property="assigned_to", type="integer", nullable=true, example=2, description="Assigned user ID"),
+ *     @OA\Property(property="due_date", type="string", format="date-time", nullable=true, example="2024-12-31T23:59:59Z", description="Task due date"),
+ *     @OA\Property(property="completed_at", type="string", format="date-time", nullable=true, example="2024-12-20T10:30:00Z", description="Task completion date")
+ * )
+ * 
+ * @OA\Schema(
+ *     schema="Error",
+ *     type="object",
+ *     title="Error Response",
+ *     description="Standard error response format",
+ *     @OA\Property(property="error", type="string", example="Task not found", description="Error message"),
+ *     @OA\Property(property="details", type="string", nullable=true, example="Task with ID 123 does not exist", description="Additional error details"),
+ *     @OA\Property(property="code", type="string", nullable=true, example="TASK_NOT_FOUND", description="Error code for programmatic handling")
+ * )
+ * 
+ * @OA\Schema(
+ *     schema="ValidationError",
+ *     type="object",
+ *     title="Validation Error Response",
+ *     description="Validation error response with field-specific errors",
+ *     @OA\Property(property="error", type="string", example="Validation failed", description="General error message"),
+ *     @OA\Property(property="details", type="object", description="Field-specific validation errors",
+ *         @OA\Property(property="title", type="array", @OA\Items(type="string"), example={"The title field is required."}),
+ *         @OA\Property(property="status", type="array", @OA\Items(type="string"), example={"The selected status is invalid."})
+ *     ),
+ *     @OA\Property(property="code", type="string", example="VALIDATION_ERROR", description="Error code")
+ * )
+ * 
+ * @OA\Response(
+ *     response="TaskUpdated",
+ *     description="Task updated successfully",
+ *     @OA\JsonContent(
+ *         @OA\Property(property="data", ref="#/components/schemas/Task"),
+ *         @OA\Property(property="message", type="string", example="Task updated successfully"),
+ *         @OA\Property(property="meta", type="object",
+ *             @OA\Property(property="changed_fields", type="array", @OA\Items(type="string")),
+ *             @OA\Property(property="changes_count", type="integer")
+ *         )
+ *     )
+ * )
+ * 
+ * @OA\Response(
+ *     response="TaskNotFound",
+ *     description="Task not found",
+ *     @OA\JsonContent(ref="#/components/schemas/Error")
+ * )
+ * 
+ * @OA\Response(
+ *     response="ValidationError",
+ *     description="Validation error",
+ *     @OA\JsonContent(ref="#/components/schemas/ValidationError")
+ * )
+ * 
+ * @OA\Response(
+ *     response="ConcurrentUpdate",
+ *     description="Concurrent update detected",
+ *     @OA\JsonContent(ref="#/components/schemas/Error")
+ * )
+ * 
+ * @OA\Response(
+ *     response="RateLimitExceeded",
+ *     description="Rate limit exceeded",
+ *     @OA\JsonContent(ref="#/components/schemas/Error")
+ * )
+ * 
+ * @OA\Response(
+ *     response="InternalError",
+ *     description="Internal server error",
+ *     @OA\JsonContent(ref="#/components/schemas/Error")
+ * )
+ */

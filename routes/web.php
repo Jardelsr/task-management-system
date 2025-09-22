@@ -101,7 +101,13 @@ $router->group([
         
         // API documentation and specs
         $router->get('/docs', 'ApiDocumentationController@index');
-        $router->get('/openapi.json', 'ApiDocumentationController@openapi');
+        $router->get('/openapi', 'ApiDocumentationController@openapi');
+        $router->get('/openapi.json', 'ApiDocumentationController@openapi'); // Alternative for tools that expect .json
+        
+        // Test route to debug .json extension issues
+        $router->get('/test.json', function () {
+            return response()->json(['message' => 'Test .json route working', 'timestamp' => time()]);
+        });
         
         // API basic information
         $router->get('/info', function () use ($router) {
@@ -118,7 +124,8 @@ $router->group([
                 ],
                 'endpoints' => [
                     'documentation' => url('/api/v1/docs'),
-                    'openapi_spec' => url('/api/v1/openapi.json'),
+                    'openapi_spec' => url('/api/v1/openapi'),
+                    'openapi_json' => url('/api/v1/openapi.json'),
                     'health_check' => url('/api/v1/health'),
                     'tasks' => url('/api/v1/tasks'),
                     'logs' => url('/api/v1/logs')
@@ -162,16 +169,7 @@ $router->group([
         });
         
         // API health and status
-        $router->get('/health', function () {
-            return response()->json([
-                'status' => 'healthy',
-                'timestamp' => \Carbon\Carbon::now()->toISOString(),
-                'services' => [
-                    'database' => 'connected',
-                    'mongodb' => 'connected'
-                ]
-            ]);
-        });
+        $router->get('/health', 'ApiDocumentationController@health');
     });
 
     /*

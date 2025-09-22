@@ -1,4 +1,4 @@
-FROM php:8.2-cli
+FROM php:8.2-apache
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
@@ -13,6 +13,9 @@ RUN apt-get update && apt-get install -y \
     pkg-config \
     libcurl4-openssl-dev \
     && rm -rf /var/lib/apt/lists/*
+
+# Enable Apache modules
+RUN a2enmod rewrite headers
 
 # Install PHP extensions
 RUN docker-php-ext-install \
@@ -34,40 +37,43 @@ ENV COMPOSER_ALLOW_SUPERUSER=1
 ENV COMPOSER_HOME=/composer
 ENV PATH="${COMPOSER_HOME}/vendor/bin:${PATH}"
 
-# Create system user for running application
-RUN useradd -G www-data,root -u 1000 -d /home/dev dev
-RUN mkdir -p /home/dev/.composer && \
-    chown -R dev:dev /home/dev
-
 # Set working directory
 WORKDIR /var/www/html
 
-# Create directory structure
+# Create directory structure and log files
 RUN mkdir -p \
     storage/framework/{sessions,views,cache} \
     storage/logs \
-    bootstrap/cache
+    bootstrap/cache \
+    && touch storage/logs/lumen.log
 
 # Set directory permissions
-RUN chown -R dev:dev /var/www/html \
+RUN chown -R www-data:www-data /var/www/html \
     && chmod -R 755 /var/www/html \
     && chmod -R 775 storage \
-    && chmod -R 775 bootstrap/cache \
-    && chgrp -R www-data storage bootstrap/cache
-
-# Switch to dev user
-USER dev
+    && chmod -R 775 bootstrap/cache
 
 # Copy composer files first (to leverage Docker cache)
-COPY --chown=dev:dev composer.json composer.lock* ./
+COPY composer.json composer.lock* ./
 
 # Install PHP dependencies
 RUN composer install --no-dev --optimize-autoloader --no-scripts
 
 # Copy the rest of the application
-COPY --chown=dev:dev . .
+COPY . .
+
+# Copy Apache virtual host configuration
+COPY docker/apache-vhost.conf /etc/apache2/sites-available/000-default.conf
+
+# Set final permissions
+RUN chown -R www-data:www-data /var/www/html \
+    && chmod -R 755 /var/www/html \
+    && chmod -R 775 storage bootstrap/cache \
+    && chown -R www-data:www-data storage \
+    && chown -R www-data:www-data bootstrap/cache
 
 # Expose port
-EXPOSE 8000
+EXPOSE 80
 
-CMD ["php", "-S", "0.0.0.0:8000", "-t", "public"]
+# Start Apache
+CMD ["apache2-foreground"]

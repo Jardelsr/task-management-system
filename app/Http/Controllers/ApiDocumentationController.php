@@ -4,12 +4,50 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\JsonResponse;
 use Carbon\Carbon;
+use OpenApi\Generator;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 
 /**
  * API Documentation Controller
  * 
  * Provides comprehensive API documentation, OpenAPI specifications,
  * and interactive documentation endpoints with robust error handling.
+ * 
+ * @OA\Info(
+ *     title="Task Management System API",
+ *     version="1.0.0",
+ *     description="A comprehensive RESTful API for managing tasks with soft delete capabilities, comprehensive logging, and advanced filtering features. Built with Lumen framework for high performance and scalability.",
+ *     @OA\License(
+ *         name="MIT License",
+ *         url="https://opensource.org/licenses/MIT"
+ *     )
+ * )
+ * 
+ * @OA\Server(
+ *     url="http://localhost:8000/api/v1",
+ *     description="Local Development Server"
+ * )
+ * 
+ * 
+ * @OA\Tag(
+ *     name="Tasks",
+ *     description="Task management operations - CRUD operations, filtering, soft deletes, and restoration"
+ * )
+ * 
+ * @OA\Tag(
+ *     name="Logs",
+ *     description="System audit logs and activity tracking"
+ * )
+ * 
+ * @OA\Tag(
+ *     name="System",
+ *     description="System health checks and API information"
+ * )
+ * 
+ * @OA\ExternalDocumentation(
+ *     description="API Documentation Wiki"
+ * )
  */
 class ApiDocumentationController extends Controller
 {
@@ -200,164 +238,95 @@ class ApiDocumentationController extends Controller
     public function openapi(): JsonResponse
     {
         try {
-            // Validate request for potential malicious patterns
-            $this->validateRequestSecurity(request()->all());
+            // Load the enhanced OpenAPI specification from file
+            $specFile = base_path('openapi-enhanced.json');
             
-            // Rate limiting for OpenAPI spec requests
-            $this->checkRateLimit(
-                'openapi:' . request()->ip(),
-                50, // 50 requests
-                3600 // per hour  
-            );
-
-            return $this->handleOperationWithTimeout(function () {
-        $spec = [
-            'openapi' => '3.0.0',
-            'info' => [
-                'title' => 'Task Management System API',
-                'version' => '1.0.0',
-                'description' => 'RESTful API for comprehensive task management with audit logging',
-                'contact' => [
-                    'name' => 'API Support',
-                    'url' => url('/api/v1/docs')
-                ]
-            ],
-            'servers' => [
-                [
-                    'url' => url('/api/v1'),
-                    'description' => 'Production API v1'
-                ],
-                [
-                    'url' => url('/'),
-                    'description' => 'Legacy API (backward compatibility)'
-                ]
-            ],
-            'paths' => [
-                '/tasks' => [
-                    'get' => [
-                        'summary' => 'List tasks',
-                        'description' => 'Retrieve a paginated list of tasks with optional filtering',
-                        'tags' => ['Tasks'],
-                        'parameters' => [
-                            [
-                                'name' => 'status',
-                                'in' => 'query',
-                                'description' => 'Filter by task status',
-                                'schema' => [
-                                    'type' => 'string',
-                                    'enum' => ['pending', 'in_progress', 'completed', 'cancelled']
-                                ]
-                            ],
-                            [
-                                'name' => 'limit',
-                                'in' => 'query',
-                                'description' => 'Number of tasks per page',
-                                'schema' => [
-                                    'type' => 'integer',
-                                    'minimum' => 1,
-                                    'maximum' => 100,
-                                    'default' => 20
-                                ]
-                            ]
-                        ],
-                        'responses' => [
-                            '200' => [
-                                'description' => 'Tasks retrieved successfully',
-                                'content' => [
-                                    'application/json' => [
-                                        'schema' => [
-                                            'type' => 'object',
-                                            'properties' => [
-                                                'data' => [
-                                                    'type' => 'array',
-                                                    'items' => ['$ref' => '#/components/schemas/Task']
-                                                ],
-                                                'meta' => ['$ref' => '#/components/schemas/PaginationMeta']
-                                            ]
-                                        ]
-                                    ]
-                                ]
-                            ]
-                        ]
-                    ],
-                    'post' => [
-                        'summary' => 'Create task',
-                        'description' => 'Create a new task',
-                        'tags' => ['Tasks'],
-                        'requestBody' => [
-                            'required' => true,
-                            'content' => [
-                                'application/json' => [
-                                    'schema' => ['$ref' => '#/components/schemas/CreateTaskRequest']
-                                ]
-                            ]
-                        ],
-                        'responses' => [
-                            '201' => [
-                                'description' => 'Task created successfully',
-                                'content' => [
-                                    'application/json' => [
-                                        'schema' => [
-                                            'type' => 'object',
-                                            'properties' => [
-                                                'data' => ['$ref' => '#/components/schemas/Task']
-                                            ]
-                                        ]
-                                    ]
-                                ]
-                            ]
-                        ]
-                    ]
-                ]
-            ],
-            'components' => [
-                'schemas' => [
-                    'Task' => [
-                        'type' => 'object',
-                        'properties' => [
-                            'id' => ['type' => 'integer'],
-                            'title' => ['type' => 'string'],
-                            'description' => ['type' => 'string', 'nullable' => true],
-                            'status' => [
-                                'type' => 'string',
-                                'enum' => ['pending', 'in_progress', 'completed', 'cancelled']
-                            ],
-                            'due_date' => ['type' => 'string', 'format' => 'date-time', 'nullable' => true],
-                            'created_at' => ['type' => 'string', 'format' => 'date-time'],
-                            'updated_at' => ['type' => 'string', 'format' => 'date-time']
-                        ]
-                    ],
-                    'CreateTaskRequest' => [
-                        'type' => 'object',
-                        'required' => ['title'],
-                        'properties' => [
-                            'title' => ['type' => 'string', 'maxLength' => 255],
-                            'description' => ['type' => 'string', 'maxLength' => 1000],
-                            'status' => [
-                                'type' => 'string',
-                                'enum' => ['pending', 'in_progress', 'completed', 'cancelled'],
-                                'default' => 'pending'
-                            ],
-                            'due_date' => ['type' => 'string', 'format' => 'date-time']
-                        ]
-                    ],
-                    'PaginationMeta' => [
-                        'type' => 'object',
-                        'properties' => [
-                            'current_page' => ['type' => 'integer'],
-                            'per_page' => ['type' => 'integer'],
-                            'total' => ['type' => 'integer'],
-                            'total_pages' => ['type' => 'integer']
-                        ]
-                    ]
-                ]
-            ]
-        ];
-
+            if (file_exists($specFile)) {
+                $spec = json_decode(file_get_contents($specFile), true);
+                
+                if ($spec === null) {
+                    throw new \Exception('Invalid JSON in OpenAPI specification file');
+                }
+                
+                // Update server URLs to match current environment
+                $currentUrl = request()->getSchemeAndHttpHost() . '/api/v1';
+                $environment = app()->environment();
+                
+                // Update the first server (current environment) to match the actual request
+                $spec['servers'][0]['url'] = $currentUrl;
+                $spec['servers'][0]['description'] = ucfirst($environment) . ' Server (Current)';
+                
+                // Add environment-specific metadata
+                $spec['info']['x-environment'] = $environment;
+                $spec['info']['x-server-time'] = Carbon::now()->toISOString();
+                $spec['info']['x-lumen-version'] = app()->version();
+                
                 return response()->json($spec, 200, [
-                    'Content-Type' => 'application/json'
+                    'Content-Type' => 'application/json',
+                    'X-API-Version' => 'v1.0',
+                    'Cache-Control' => 'public, max-age=3600'
                 ]);
-            }, 'openapi_generation', 10); // 10 second timeout
+            }
+            
+            // Fallback to basic spec if enhanced file doesn't exist
+            $currentUrl = request()->getSchemeAndHttpHost() . '/api/v1';
+            $environment = app()->environment();
+            
+            $spec = [
+                'openapi' => '3.0.0',
+                'info' => [
+                    'title' => 'Task Management System API',
+                    'version' => '1.0.0',
+                    'description' => 'A comprehensive RESTful API for managing tasks. Built with Lumen framework.',
+                    'contact' => [
+                        'name' => 'API Support Team',
+                        'email' => 'api-support@taskmanagement.com'
+                    ],
+                    'license' => [
+                        'name' => 'MIT License',
+                        'url' => 'https://opensource.org/licenses/MIT'
+                    ],
+                    'x-environment' => $environment,
+                    'x-server-time' => Carbon::now()->toISOString(),
+                    'x-lumen-version' => app()->version()
+                ],
+                'servers' => [
+                    [
+                        'url' => $currentUrl,
+                        'description' => ucfirst($environment) . ' Server (Current)'
+                    ]
+                ],
+                'paths' => [
+                    '/tasks' => [
+                        'get' => [
+                            'tags' => ['Tasks'],
+                            'summary' => 'Get all tasks',
+                            'responses' => [
+                                '200' => [
+                                    'description' => 'Tasks retrieved successfully'
+                                ]
+                            ]
+                        ]
+                    ]
+                ],
+                'components' => [
+                    'schemas' => [
+                        'Task' => [
+                            'type' => 'object',
+                            'properties' => [
+                                'id' => ['type' => 'integer'],
+                                'title' => ['type' => 'string'],
+                                'status' => ['type' => 'string']
+                            ]
+                        ]
+                    ]
+                ]
+            ];
+            
+            return response()->json($spec, 200, [
+                'Content-Type' => 'application/json',
+                'X-API-Version' => 'v1.0'
+            ]);
             
         } catch (\Exception $e) {
             Log::error('OpenAPI generation failed', [
@@ -365,10 +334,10 @@ class ApiDocumentationController extends Controller
                 'trace' => $e->getTraceAsString()
             ]);
             
-            return $this->serverErrorResponse(
-                'OpenAPI specification generation failed', 
-                ['error_type' => get_class($e)]
-            );
+            return response()->json([
+                'error' => 'Failed to generate OpenAPI specification',
+                'message' => $e->getMessage()
+            ], 500);
         }
     }
 

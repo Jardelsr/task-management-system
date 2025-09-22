@@ -246,10 +246,10 @@ class EnhancedLogService implements LogServiceInterface
         }
     }
 
-    public function getLogStatistics(): array
+    public function getLogStatistics(?Carbon $startDate = null, ?Carbon $endDate = null): array
     {
         try {
-            return $this->logRepository->getStatistics();
+            return $this->logRepository->getStatistics($startDate, $endDate);
         } catch (\Exception $e) {
             return ['total' => 0, 'actions' => []];
         }
