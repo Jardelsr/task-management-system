@@ -512,8 +512,8 @@ class TaskLog extends Model
         // Add technical metadata if requested
         if ($options['include_technical'] ?? false) {
             $meta['technical'] = [
-                'collection' => $this->getCollection(),
-                'mongo_id' => (string) $this->_id,
+                'collection' => $this->getTable(),
+                'mongo_id' => (string) ($this->_id ?? $this->getKey()),
                 'document_size' => $this->estimateDocumentSize()
             ];
         }

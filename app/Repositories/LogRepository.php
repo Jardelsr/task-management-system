@@ -46,23 +46,23 @@ class LogRepository implements LogRepositoryInterface
      *
      * @param string $id
      * @return TaskLog|null
-     * @throws \App\Exceptions\LoggingException If the ID format is invalid
      */
     public function findById(string $id): ?TaskLog
     {
         // Validate MongoDB ObjectId format (24 character hex string)
         if (!$this->isValidObjectId($id)) {
-            throw new \App\Exceptions\LoggingException(
-                "Invalid MongoDB ObjectId format: {$id}",
-                'validation',
-                ['provided_id' => $id, 'expected_format' => '24 character hex string']
-            );
+            // For better UX, treat invalid ObjectId format as "not found" instead of validation error
+            \Log::info('Invalid ObjectId format provided', [
+                'provided_id' => $id,
+                'expected_format' => '24 character hex string'
+            ]);
+            return null;
         }
 
         try {
             return TaskLog::find($id);
         } catch (\Exception $e) {
-            // Log the error and return null for invalid IDs instead of throwing
+            // Log the error and return null for invalid IDs
             \Log::warning('Failed to find log by ID', [
                 'log_id' => $id,
                 'error' => $e->getMessage()

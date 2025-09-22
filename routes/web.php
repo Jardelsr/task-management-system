@@ -271,7 +271,7 @@ $router->group([
         $router->get('/deletions/stats', 'LogController@deletionStats');
         
         // Filtered log collections
-        $router->get('/actions/{action}', 'LogController@byAction');
+        $router->get('/actions/{action:created|updated|deleted|restored}', 'LogController@byAction');
         $router->get('/users/{userId:[0-9]+}', 'LogController@byUser');
         
         // Task-specific logs
@@ -412,7 +412,7 @@ $router->group([
         $router->get('/tasks/{taskId:[0-9]+}', 'LogController@taskLogs');
         
         // Filtered logs (with parameters)
-        $router->get('/actions/{action}', 'LogController@byAction');
+        $router->get('/actions/{action:created|updated|deleted|restored}', 'LogController@byAction');
         $router->get('/users/{userId:[0-9]+}', 'LogController@byUser');
         
         // Variable routes last

@@ -1,0 +1,1879 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Task Management System API - Complete with Comprehensive Log API",
+    "version": "1.0.0",
+    "description": "Complete RESTful API for managing tasks with comprehensive logging, soft delete capabilities, and advanced filtering features. Built with Lumen framework for high performance. Includes all log endpoints with detailed response schemas.",
+    "contact": {
+      "email": "admin@taskmanagement.com"
+    },
+    "license": {
+      "name": "MIT",
+      "url": "https://opensource.org/licenses/MIT"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8000/api/v1",
+      "description": "Development API Server (Versioned)"
+    },
+    {
+      "url": "http://localhost:8000",
+      "description": "Development API Server (Legacy Routes)"
+    }
+  ],
+  "paths": {
+    "/tasks": {
+      "get": {
+        "tags": ["Tasks"],
+        "summary": "Get all tasks",
+        "description": "Retrieve a paginated list of tasks with optional filtering",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page number for pagination",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Number of tasks per page",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tasks retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Task"
+                      }
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Tasks retrieved successfully"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["Tasks"],
+        "summary": "Create a new task",
+        "description": "Create a new task with comprehensive validation",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TaskCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Task created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Task"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Task created successfully"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tasks/{id}": {
+      "get": {
+        "tags": ["Tasks"],
+        "summary": "Get specific task",
+        "description": "Retrieve a specific task by ID",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Task ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Task retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Task"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Task retrieved successfully"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Task not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["Tasks"],
+        "summary": "Update task",
+        "description": "Update an existing task",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Task ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TaskUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Task updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Task"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Task updated successfully"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Task not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["Tasks"],
+        "summary": "Delete task",
+        "description": "Soft delete a task",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Task ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Task deleted successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Task deleted successfully"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Task not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/logs": {
+      "get": {
+        "tags": ["Logs"],
+        "summary": "Get system logs with advanced filtering",
+        "description": "Retrieve system activity logs with comprehensive filtering and pagination options. Supports multiple filter types including date ranges, log levels, actions, and user/task associations.",
+        "operationId": "getLogs",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page number for pagination",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Number of logs per page",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000,
+              "default": 50
+            }
+          },
+          {
+            "name": "action",
+            "in": "query",
+            "description": "Filter by action type",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["created", "updated", "deleted", "restored", "soft_delete", "force_delete", "bulk_update", "status_change", "assignment_change", "metadata_update"]
+            }
+          },
+          {
+            "name": "task_id",
+            "in": "query",
+            "description": "Filter by specific task ID",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "user_id",
+            "in": "query",
+            "description": "Filter by user ID",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "level",
+            "in": "query",
+            "description": "Filter by log level",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["info", "warning", "error", "debug"]
+            }
+          },
+          {
+            "name": "source",
+            "in": "query",
+            "description": "Filter by log source component",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "start_date",
+            "in": "query",
+            "description": "Start date for filtering logs (YYYY-MM-DD HH:MM:SS)",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "end_date",
+            "in": "query",
+            "description": "End date for filtering logs (YYYY-MM-DD HH:MM:SS)",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "sort_by",
+            "in": "query",
+            "description": "Field to sort by",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["created_at", "action", "task_id", "user_id", "level"],
+              "default": "created_at"
+            }
+          },
+          {
+            "name": "sort_order",
+            "in": "query",
+            "description": "Sort order",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["asc", "desc"],
+              "default": "desc"
+            }
+          },
+          {
+            "name": "include_metadata",
+            "in": "query",
+            "description": "Include response metadata",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": true
+            }
+          },
+          {
+            "name": "include_technical",
+            "in": "query",
+            "description": "Include technical details",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
+            "name": "include_changes",
+            "in": "query",
+            "description": "Include detailed change information",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": true
+            }
+          },
+          {
+            "name": "date_format",
+            "in": "query",
+            "description": "Format for date fields",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["iso8601", "rfc2822", "human"],
+              "default": "iso8601"
+            }
+          },
+          {
+            "name": "id",
+            "in": "query",
+            "description": "Get specific log by ID",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Logs retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LogListResponse"
+                }
+              }
+            },
+            "headers": {
+              "X-Total-Count": {
+                "description": "Total number of logs",
+                "schema": { "type": "integer" }
+              },
+              "X-Page": {
+                "description": "Current page number",
+                "schema": { "type": "integer" }
+              },
+              "X-Per-Page": {
+                "description": "Number of logs per page",
+                "schema": { "type": "integer" }
+              },
+              "X-Total-Pages": {
+                "description": "Total number of pages",
+                "schema": { "type": "integer" }
+              },
+              "X-Applied-Filters": {
+                "description": "Applied filter names",
+                "schema": { "type": "string" }
+              },
+              "X-Query-Execution-Time": {
+                "description": "Query execution time",
+                "schema": { "type": "string" }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "404": {
+            "description": "Log not found",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ValidationErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/logs/{id}": {
+      "get": {
+        "tags": ["Logs"],
+        "summary": "Get specific log by ID",
+        "description": "Retrieve a specific log entry by its unique identifier",
+        "operationId": "getLogById",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Log ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "include_technical",
+            "in": "query",
+            "description": "Include technical details",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Log retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SingleLogResponse"
+                }
+              }
+            },
+            "headers": {
+              "X-Log-ID": {
+                "description": "Log identifier",
+                "schema": { "type": "string" }
+              },
+              "X-Retrieved-At": {
+                "description": "Retrieval timestamp",
+                "schema": { "type": "string" }
+              }
+            }
+          },
+          "404": {
+            "description": "Log not found",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/logs/stats": {
+      "get": {
+        "tags": ["Logs"],
+        "summary": "Get log statistics",
+        "description": "Retrieve comprehensive statistics about system logs",
+        "operationId": "getLogStatistics",
+        "parameters": [
+          {
+            "name": "start_date",
+            "in": "query",
+            "description": "Start date for statistics",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "end_date",
+            "in": "query",
+            "description": "End date for statistics",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "include_performance",
+            "in": "query",
+            "description": "Include performance metrics",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
+            "name": "detailed",
+            "in": "query",
+            "description": "Include detailed breakdown",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": true
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Statistics retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LogStatisticsResponse"
+                }
+              }
+            },
+            "headers": {
+              "X-Statistics-Period": {
+                "description": "Period analyzed",
+                "schema": { "type": "string" }
+              },
+              "X-Total-Logs": {
+                "description": "Total logs analyzed",
+                "schema": { "type": "integer" }
+              },
+              "X-Generated-At": {
+                "description": "Generation timestamp",
+                "schema": { "type": "string" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ValidationErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/logs/tasks/{taskId}": {
+      "get": {
+        "tags": ["Logs"],
+        "summary": "Get logs for specific task",
+        "description": "Retrieve logs for actions performed on a specific task",
+        "operationId": "getTaskLogs",
+        "parameters": [
+          {
+            "name": "taskId",
+            "in": "path",
+            "description": "Task ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Number of logs to retrieve",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000,
+              "default": 50
+            }
+          },
+          {
+            "name": "include_metadata",
+            "in": "query",
+            "description": "Include response metadata",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": true
+            }
+          },
+          {
+            "name": "include_technical",
+            "in": "query",
+            "description": "Include technical details",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
+            "name": "include_changes",
+            "in": "query",
+            "description": "Include detailed change information",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": true
+            }
+          },
+          {
+            "name": "date_format",
+            "in": "query",
+            "description": "Format for date fields",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["iso8601", "rfc2822", "human"],
+              "default": "iso8601"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Task logs retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskLogsResponse"
+                }
+              }
+            },
+            "headers": {
+              "X-Task-ID": {
+                "description": "Task ID filtered",
+                "schema": { "type": "integer" }
+              },
+              "X-Total-Count": {
+                "description": "Total logs found",
+                "schema": { "type": "integer" }
+              },
+              "X-Returned-Count": {
+                "description": "Number of logs returned",
+                "schema": { "type": "integer" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ValidationErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/logs/recent": {
+      "get": {
+        "tags": ["Logs"],
+        "summary": "Get recent logs",
+        "description": "Retrieve the most recent log entries",
+        "operationId": "getRecentLogs",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Number of recent logs to retrieve",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000,
+              "default": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Recent logs retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecentLogsResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/logs/export": {
+      "get": {
+        "tags": ["Logs"],
+        "summary": "Export logs",
+        "description": "Export logs based on filtering criteria",
+        "operationId": "exportLogs",
+        "parameters": [
+          {
+            "name": "start_date",
+            "in": "query",
+            "description": "Start date for export",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "end_date",
+            "in": "query",
+            "description": "End date for export",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "action",
+            "in": "query",
+            "description": "Filter by action type",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "task_id",
+            "in": "query",
+            "description": "Filter by task ID",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "user_id",
+            "in": "query",
+            "description": "Filter by user ID",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Logs exported successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LogExportResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ValidationErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/logs/cleanup": {
+      "delete": {
+        "tags": ["Logs"],
+        "summary": "Clean up old logs",
+        "description": "Clean up old logs based on retention policy",
+        "operationId": "cleanupLogs",
+        "parameters": [
+          {
+            "name": "retention_days",
+            "in": "query",
+            "description": "Number of days to retain logs",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 90
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Log cleanup completed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LogCleanupResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Task": {
+        "type": "object",
+        "required": ["id", "title", "status", "created_at", "updated_at"],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "example": 1,
+            "description": "Task ID"
+          },
+          "title": {
+            "type": "string",
+            "example": "Complete project documentation",
+            "description": "Task title"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true,
+            "example": "Write comprehensive documentation for the project",
+            "description": "Task description"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["pending", "in_progress", "completed", "cancelled"],
+            "example": "pending",
+            "description": "Task status"
+          },
+          "priority": {
+            "type": "string",
+            "enum": ["low", "medium", "high", "urgent"],
+            "example": "medium",
+            "description": "Task priority"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2024-12-01T09:00:00Z",
+            "description": "Task creation date"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2024-12-15T14:30:00Z",
+            "description": "Task last update date"
+          },
+          "deleted_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "Task deletion date (for soft deletes)"
+          }
+        }
+      },
+      "TaskCreateRequest": {
+        "type": "object",
+        "required": ["title"],
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 255,
+            "example": "Complete project documentation",
+            "description": "Task title (required)"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true,
+            "example": "Write comprehensive documentation for the project",
+            "description": "Task description"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["pending", "in_progress", "completed", "cancelled"],
+            "example": "pending",
+            "description": "Task status (defaults to 'pending')"
+          },
+          "priority": {
+            "type": "string",
+            "enum": ["low", "medium", "high", "urgent"],
+            "example": "medium",
+            "description": "Task priority (defaults to 'medium')"
+          }
+        }
+      },
+      "TaskUpdateRequest": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 255,
+            "example": "Complete project documentation",
+            "description": "Task title"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true,
+            "example": "Write comprehensive documentation for the project",
+            "description": "Task description"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["pending", "in_progress", "completed", "cancelled"],
+            "example": "pending",
+            "description": "Task status"
+          },
+          "priority": {
+            "type": "string",
+            "enum": ["low", "medium", "high", "urgent"],
+            "example": "medium",
+            "description": "Task priority"
+          }
+        }
+      },
+      "LogEntry": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique log entry identifier",
+            "example": "674f1b123456789abcdef012"
+          },
+          "task_id": {
+            "type": "integer",
+            "nullable": true,
+            "description": "ID of the task this log relates to",
+            "example": 123
+          },
+          "action": {
+            "type": "string",
+            "description": "Action that was performed",
+            "example": "created"
+          },
+          "user_id": {
+            "type": "integer",
+            "nullable": true,
+            "description": "ID of the user who performed the action",
+            "example": 456
+          },
+          "level": {
+            "type": "string",
+            "description": "Log level",
+            "enum": ["info", "warning", "error", "debug"],
+            "example": "info"
+          },
+          "source": {
+            "type": "string",
+            "nullable": true,
+            "description": "Source component that generated the log",
+            "example": "TaskController"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true,
+            "description": "Human-readable description of the action",
+            "example": "Task created with title 'Complete project documentation'"
+          },
+          "data": {
+            "type": "object",
+            "nullable": true,
+            "description": "Additional data associated with the log entry",
+            "example": {
+              "old_data": {},
+              "new_data": {
+                "title": "Complete project documentation",
+                "status": "pending"
+              },
+              "changes": ["title", "status"],
+              "change_count": 2
+            }
+          },
+          "ip_address": {
+            "type": "string",
+            "nullable": true,
+            "description": "IP address of the client that made the request",
+            "example": "192.168.1.100"
+          },
+          "user_agent": {
+            "type": "string",
+            "nullable": true,
+            "description": "User agent string of the client",
+            "example": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the log entry was created",
+            "example": "2024-12-01T15:30:45Z"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "When the log entry was last updated",
+            "example": "2024-12-01T15:30:45Z"
+          }
+        },
+        "required": ["id", "action", "level", "created_at"]
+      },
+      "LogListResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": true
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2024-12-01T15:30:45Z"
+          },
+          "message": {
+            "type": "string",
+            "example": "Logs retrieved successfully"
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LogEntry"
+            }
+          },
+          "meta": {
+            "$ref": "#/components/schemas/LogResponseMeta"
+          }
+        },
+        "required": ["success", "timestamp", "message", "data"]
+      },
+      "SingleLogResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": true
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2024-12-01T15:30:45Z"
+          },
+          "message": {
+            "type": "string",
+            "example": "Log retrieved successfully"
+          },
+          "data": {
+            "$ref": "#/components/schemas/LogEntry"
+          },
+          "meta": {
+            "type": "object",
+            "properties": {
+              "log_id": {
+                "type": "string",
+                "example": "674f1b123456789abcdef012"
+              },
+              "retrieved_at": {
+                "type": "string",
+                "format": "date-time",
+                "example": "2024-12-01T15:30:45Z"
+              },
+              "include_technical": {
+                "type": "boolean",
+                "example": false
+              }
+            }
+          }
+        },
+        "required": ["success", "timestamp", "message", "data"]
+      },
+      "LogResponseMeta": {
+        "type": "object",
+        "properties": {
+          "pagination": {
+            "$ref": "#/components/schemas/PaginationMeta"
+          },
+          "statistics": {
+            "type": "object",
+            "properties": {
+              "total_actions": {
+                "type": "object",
+                "description": "Count of each action type in the filtered results",
+                "example": {
+                  "created": 450,
+                  "updated": 320,
+                  "deleted": 25,
+                  "restored": 5
+                }
+              },
+              "date_range": {
+                "type": "object",
+                "properties": {
+                  "start": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "end": {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                }
+              },
+              "unique_users": {
+                "type": "integer",
+                "description": "Number of unique users in the filtered results",
+                "example": 15
+              },
+              "unique_tasks": {
+                "type": "integer",
+                "description": "Number of unique tasks in the filtered results",
+                "example": 200
+              }
+            }
+          },
+          "applied_filters": {
+            "type": "object",
+            "description": "Filter parameters that were applied to the query",
+            "example": {
+              "action": "created",
+              "start_date": "2024-01-01 00:00:00",
+              "end_date": "2024-12-31 23:59:59"
+            }
+          },
+          "query_metadata": {
+            "type": "object",
+            "properties": {
+              "sort_by": {
+                "type": "string",
+                "example": "created_at"
+              },
+              "sort_order": {
+                "type": "string",
+                "example": "desc"
+              },
+              "execution_time": {
+                "type": "number",
+                "description": "Query execution time in milliseconds",
+                "example": 15.23
+              }
+            }
+          }
+        }
+      },
+      "LogStatisticsResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": true
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2024-12-01T15:30:45Z"
+          },
+          "message": {
+            "type": "string",
+            "example": "Log statistics retrieved successfully"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "summary": {
+                "type": "object",
+                "properties": {
+                  "total_logs": {
+                    "type": "integer",
+                    "example": 1250
+                  },
+                  "period_analyzed": {
+                    "type": "object",
+                    "properties": {
+                      "start": {
+                        "type": "string",
+                        "format": "date-time"
+                      },
+                      "end": {
+                        "type": "string",
+                        "format": "date-time"
+                      }
+                    }
+                  }
+                }
+              },
+              "by_action": {
+                "type": "object",
+                "example": {
+                  "created": 450,
+                  "updated": 620,
+                  "deleted": 150,
+                  "restored": 30
+                }
+              },
+              "by_level": {
+                "type": "object",
+                "example": {
+                  "info": 1000,
+                  "warning": 200,
+                  "error": 40,
+                  "debug": 10
+                }
+              },
+              "by_user": {
+                "type": "object",
+                "description": "Statistics by user ID",
+                "example": {
+                  "1": 350,
+                  "2": 275,
+                  "3": 425
+                }
+              },
+              "hourly_distribution": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "hour": {
+                      "type": "integer"
+                    },
+                    "count": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "meta": {
+            "type": "object",
+            "properties": {
+              "generated_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "include_performance": {
+                "type": "boolean"
+              },
+              "detailed_breakdown": {
+                "type": "boolean"
+              }
+            }
+          }
+        },
+        "required": ["success", "timestamp", "message", "data"]
+      },
+      "LogExportResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": true
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2024-12-01T15:30:45Z"
+          },
+          "message": {
+            "type": "string",
+            "example": "Logs exported successfully"
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LogEntry"
+            }
+          },
+          "meta": {
+            "type": "object",
+            "properties": {
+              "total_exported": {
+                "type": "integer",
+                "example": 500
+              },
+              "filters_applied": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "example": ["start_date", "end_date", "action"]
+              },
+              "export_timestamp": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          }
+        },
+        "required": ["success", "timestamp", "message", "data"]
+      },
+      "RecentLogsResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": true
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2024-12-01T15:30:45Z"
+          },
+          "message": {
+            "type": "string",
+            "example": "Last 100 logs retrieved successfully"
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LogEntry"
+            }
+          },
+          "meta": {
+            "type": "object",
+            "properties": {
+              "count": {
+                "type": "integer",
+                "example": 100
+              },
+              "limit": {
+                "type": "integer",
+                "example": 100
+              },
+              "timestamp": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          }
+        },
+        "required": ["success", "timestamp", "message", "data"]
+      },
+      "TaskLogsResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": true
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2024-12-01T15:30:45Z"
+          },
+          "message": {
+            "type": "string",
+            "example": "Logs for task 456 retrieved successfully"
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LogEntry"
+            }
+          },
+          "meta": {
+            "type": "object",
+            "properties": {
+              "task_id": {
+                "type": "integer",
+                "example": 456
+              },
+              "total_logs_for_task": {
+                "type": "integer",
+                "example": 25
+              },
+              "returned_count": {
+                "type": "integer",
+                "example": 25
+              },
+              "include_metadata": {
+                "type": "boolean",
+                "example": true
+              },
+              "include_technical": {
+                "type": "boolean",
+                "example": false
+              },
+              "include_changes": {
+                "type": "boolean",
+                "example": true
+              },
+              "date_format": {
+                "type": "string",
+                "example": "iso8601"
+              }
+            }
+          }
+        },
+        "required": ["success", "timestamp", "message", "data"]
+      },
+      "LogCleanupResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": true
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2024-12-01T15:30:45Z"
+          },
+          "message": {
+            "type": "string",
+            "example": "Log cleanup completed successfully"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "deleted_logs_count": {
+                "type": "integer",
+                "example": 500
+              },
+              "retention_days": {
+                "type": "integer",
+                "example": 90
+              },
+              "cleanup_date": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          },
+          "meta": {
+            "type": "object",
+            "properties": {
+              "operation": {
+                "type": "string",
+                "example": "cleanup"
+              },
+              "affected_records": {
+                "type": "integer",
+                "example": 500
+              }
+            }
+          }
+        },
+        "required": ["success", "timestamp", "message", "data"]
+      },
+      "PaginationMeta": {
+        "type": "object",
+        "properties": {
+          "current_page": {
+            "type": "integer",
+            "example": 1
+          },
+          "per_page": {
+            "type": "integer",
+            "example": 50
+          },
+          "total": {
+            "type": "integer",
+            "example": 1250
+          },
+          "last_page": {
+            "type": "integer",
+            "example": 25
+          },
+          "from": {
+            "type": "integer",
+            "example": 1
+          },
+          "to": {
+            "type": "integer",
+            "example": 50
+          },
+          "has_next_page": {
+            "type": "boolean",
+            "example": true
+          },
+          "has_previous_page": {
+            "type": "boolean",
+            "example": false
+          }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": false
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2024-12-01T15:30:45Z"
+          },
+          "message": {
+            "type": "string",
+            "example": "Log not found"
+          },
+          "error": {
+            "type": "string",
+            "example": "Not Found"
+          },
+          "status_code": {
+            "type": "integer",
+            "example": 404
+          },
+          "error_code": {
+            "type": "string",
+            "example": "RESOURCE_NOT_FOUND"
+          },
+          "details": {
+            "type": "object",
+            "nullable": true,
+            "description": "Additional error details"
+          },
+          "request_info": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "method": {
+                "type": "string",
+                "example": "GET"
+              },
+              "path": {
+                "type": "string",
+                "example": "api/v1/logs/invalid_id"
+              },
+              "ip": {
+                "type": "string",
+                "example": "172.18.0.1"
+              }
+            }
+          },
+          "debug": {
+            "type": "object",
+            "nullable": true,
+            "description": "Debug information (in development mode)"
+          }
+        },
+        "required": ["success", "timestamp", "message", "error", "status_code", "error_code"]
+      },
+      "ValidationErrorResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": false
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2024-12-01T15:30:45Z"
+          },
+          "message": {
+            "type": "string",
+            "example": "Task validation failed"
+          },
+          "error": {
+            "type": "string",
+            "example": "Validation Error"
+          },
+          "status_code": {
+            "type": "integer",
+            "example": 422
+          },
+          "error_code": {
+            "type": "string",
+            "example": "VALIDATION_FAILED"
+          },
+          "details": {
+            "type": "object",
+            "properties": {
+              "errors": {
+                "type": "object",
+                "description": "Field-specific validation errors",
+                "example": {
+                  "start_date": {
+                    "messages": ["The start date must be a valid date"],
+                    "first_message": "The start date must be a valid date"
+                  }
+                }
+              },
+              "failed_fields": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "example": ["start_date", "end_date"]
+              },
+              "error_count": {
+                "type": "integer",
+                "example": 2
+              }
+            }
+          },
+          "context": {
+            "type": "object",
+            "nullable": true,
+            "description": "Additional validation context"
+          },
+          "request_info": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "method": {
+                "type": "string",
+                "example": "GET"
+              },
+              "path": {
+                "type": "string",
+                "example": "api/v1/logs/date-range"
+              },
+              "ip": {
+                "type": "string",
+                "example": "172.18.0.1"
+              }
+            }
+          },
+          "debug": {
+            "type": "object",
+            "nullable": true,
+            "description": "Debug information (in development mode)"
+          }
+        },
+        "required": ["success", "timestamp", "message", "error", "status_code", "error_code"]
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "Tasks",
+      "description": "Task management operations with comprehensive CRUD functionality, soft deletes, and audit trails"
+    },
+    {
+      "name": "Logs",
+      "description": "Activity logging and audit trail operations. Comprehensive logging system for tracking all task-related activities with advanced filtering capabilities."
+    }
+  ]
+}
